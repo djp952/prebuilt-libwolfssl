@@ -1,6 +1,6 @@
 /* sp_int.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -31,6 +31,7 @@ This library provides single precision (SP) integer math functions.
 #include <limits.h>
 #endif
 #include  <wolfssl/wolfcrypt/settings.h>
+#include  <wolfssl/wolfcrypt/hash.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,7 +96,9 @@ extern "C" {
     #error "Size of unsigned int not detected"
 #endif
 
-#if ULONG_MAX == 18446744073709551615UL
+#if ULONG_MAX == 18446744073709551615ULL && \
+        4294967295UL != 18446744073709551615ULL /* verify pre-processor supports
+                                                * 64-bit ULL types */
     #define SP_ULONG_BITS    64
 
     typedef unsigned long sp_uint64;
@@ -265,7 +268,8 @@ extern "C" {
 #elif SP_WORD_SIZE == 64
     typedef  sp_uint64  sp_int_digit;
     typedef   sp_int64 sp_sint_digit;
-#if defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)
+#if (defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)) && \
+    !defined(_WIN64) && defined(WOLFSSL_UINT128_T_DEFINED)
     typedef sp_uint128  sp_int_word;
     typedef  sp_int128  sp_int_sword;
 #endif
@@ -342,7 +346,9 @@ extern "C" {
 #if defined(WOLFSSL_HAVE_SP_ECC) && defined(WOLFSSL_SP_NONBLOCK)
 /* Non-blocking ECC operation context. */
 typedef struct sp_ecc_ctx {
-    #ifdef WOLFSSL_SP_384
+    #ifdef WOLFSSL_SP_521
+    byte data[66*80]; /* stack data */
+    #elif defined(WOLFSSL_SP_384)
     byte data[48*80]; /* stack data */
     #else
     byte data[32*80]; /* stack data */
@@ -353,67 +359,76 @@ typedef struct sp_ecc_ctx {
 #if defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)
 #include <wolfssl/wolfcrypt/random.h>
 
-#ifdef SP_INT_BITS
-    /* Calculate number of digits to have in an sp_int based maximum size of
-     * numbers in bits that will be used.
-     * Double the size to hold multiplication result.
-     * Add one to accommodate extra digit used by sp_mul(), sp_mulmod(), sp_sqr(), and sp_sqrmod().
-     */
-    #define SP_INT_DIGITS                                                      \
-        ((((SP_INT_BITS + (SP_WORD_SIZE - 1)) * 2 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
+#ifndef SP_INT_BITS
+    #ifdef SP_INT_DIGITS
+        #define SP_INT_BITS (((SP_INT_DIGITS - 1) * SP_WORD_SIZE) / 2)
+    #else
+        /* Calculate number of bits to have in an sp_int based on features
+         * compiled in.
+         */
+        #ifdef WOLFSSL_MYSQL_COMPATIBLE
+            /* MySQL wants to be able to use 8192-bit numbers. */
+            #define SP_INT_BITS     8192
+        #elif !defined(WOLFSSL_HAVE_SP_RSA) && !defined(WOLFSSL_HAVE_SP_DH) && \
+            !defined(WOLFSSL_HAVE_SP_ECC)
+            /* Not using SP - must be SP math all. */
+            #if !defined(NO_RSA) || !defined(NO_DH) || !defined(NO_DSA)
+                /* Support max size FFHDE parameters compiled in. */
+                #if !defined(NO_DH) && defined(HAVE_FFDHE_8192)
+                    #define SP_INT_BITS     8192
+                #elif !defined(NO_DH) && defined(HAVE_FFDHE_6144)
+                    #define SP_INT_BITS     6144
+                #elif !defined(NO_DH) && defined(HAVE_FFDHE_4096)
+                    #define SP_INT_BITS     4096
+                #else
+                    /* Default to max 3072 for general RSA and DH. */
+                    #define SP_INT_BITS     3072
+                #endif
+            #elif defined(WOLFCRYPT_HAVE_SAKKE)
+                #define SP_INT_BITS     1024
+            #elif defined(HAVE_ECC)
+                /* P521 is the largest supported ECC algorithm curve. */
+                #define SP_INT_BITS     521
+            #elif !defined(NO_PWDBASED) && defined(HAVE_PKCS12)
+                /*  wc_PKCS12_PBKDF_ex() */
+                #define SP_INT_BITS     WC_MAX_DIGEST_SIZE * 8
+            #else
+                #define SP_INT_BITS     128
+            #endif
+        #elif !defined(WOLFSSL_HAVE_SP_RSA) && !defined(WOLFSSL_HAVE_SP_DH)
+            /* Not use SP_RSA or DH but are using SP ECC. */
+            #if defined(WOLFCRYPT_HAVE_SAKKE)
+                #define SP_INT_BITS     1024
+            #elif defined(WOLFSSL_SP_521) || defined(WOLFSSL_SP_MATH_ALL)
+                /* P521 is the largest supported ECC algorithm curve. */
+                #define SP_INT_BITS     521
+            #elif defined(WOLFSSL_SP_384)
+                /* No generic support - largest curve P384. */
+                #define SP_INT_BITS     384
+            #else
+                /* No generic support - largest curve P256. */
+                #define SP_INT_BITS     256
+            #endif
+        /* SP RSA and DH supported so base on max size of RSA/DH in SP. */
+        #elif defined(WOLFSSL_SP_4096)
+            #define SP_INT_BITS     4096
+        #elif !defined(WOLFSSL_SP_NO_3072) || defined(WOLFSSL_SP_MATH_ALL)
+            #define SP_INT_BITS     3072
+        #else
+            #define SP_INT_BITS     2048
+        #endif
+    #endif
 #endif
 
 #ifndef SP_INT_DIGITS
-    /* Calculate number of digits to have in an sp_int based on features
-     * compiled in.
+    /* Calculate number of digits to have in an sp_int based on maximum size of
+     * numbers in bits that will be used.
+     * Double the size to hold multiplication result.
+     * Add one to accommodate extra digit used by sp_mul(), sp_mulmod(),
+     * sp_sqr(), and sp_sqrmod().
      */
-    #if !defined(WOLFSSL_HAVE_SP_RSA) && !defined(WOLFSSL_HAVE_SP_DH) && \
-        !defined(WOLFSSL_HAVE_SP_ECC)
-        #if !defined(NO_RSA) || !defined(NO_DH) || !defined(NO_DSA)
-            #define SP_INT_DIGITS        (((6144 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #elif defined(WOLFCRYPT_HAVE_SAKKE)
-            #define SP_INT_DIGITS   \
-                    (((2 * (1024 + SP_WORD_SIZE) + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #elif defined(HAVE_ECC)
-            #define SP_INT_DIGITS   \
-                    (((2 * ( 521 + SP_WORD_SIZE) + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #elif !defined(NO_PWDBASED) && defined(WOLFSSL_SHA512)
-            #define SP_INT_DIGITS        ((( 512 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #else
-            #define SP_INT_DIGITS        ((( 256 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #endif
-    #elif !defined(WOLFSSL_HAVE_SP_RSA) && !defined(WOLFSSL_HAVE_SP_DH)
-        #if defined(WOLFCRYPT_HAVE_SAKKE)
-            #define SP_INT_DIGITS   \
-                    (((2 * (1024 + SP_WORD_SIZE) + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #elif defined(WOLFSSL_SP_MATH_ALL)
-            #define SP_INT_DIGITS   \
-                    (((2 * ( 521 + SP_WORD_SIZE) + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #elif defined(WOLFSSL_SP_384)
-            #define SP_INT_DIGITS        ((( 768 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #else
-            #define SP_INT_DIGITS        ((( 512 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #endif
-    #elif defined(WOLFSSL_SP_4096)
-        #if defined(WOLFSSL_HAVE_SP_DH)
-            #define SP_INT_DIGITS        (((8192 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #else
-            #define SP_INT_DIGITS        (((4096 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #endif
-    #elif !defined(WOLFSSL_SP_NO_3072)
-        #if defined(WOLFSSL_HAVE_SP_DH)
-            #define SP_INT_DIGITS        (((6144 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #else
-            #define SP_INT_DIGITS        (((3072 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #endif
-    #else
-        #if defined(WOLFSSL_HAVE_SP_DH) || \
-                (defined(WOLFSSL_HAVE_SP_RSA) && defined(WOLFSSL_KEY_GEN))
-            #define SP_INT_DIGITS        (((4096 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #else
-            #define SP_INT_DIGITS        (((2048 + SP_WORD_SIZE) / SP_WORD_SIZE) + 1)
-        #endif
-    #endif
+    #define SP_INT_DIGITS                                                      \
+        (((SP_INT_BITS * 2 + SP_WORD_SIZE - 1) / SP_WORD_SIZE) + 1)
 #endif
 
 #ifndef SP_INT_MAX_BITS
@@ -431,7 +446,7 @@ typedef struct sp_ecc_ctx {
     #define SP_INT_WORD_MAX         ((1 << (SP_WORD_SIZE * 2)) - 1)
 
     #if SP_MUL_SQR_MAX_PARTIAL > SP_INT_WORD_MAX
-        /* The sum of the partials in the multiplicaiton/square can exceed the
+        /* The sum of the partials in the multiplication/square can exceed the
          * size of a word. This will overflow the word and loose data.
          * Use an implementation that handles carry after every add and uses an
          * extra temporary word for overflowing high word.
@@ -648,7 +663,7 @@ typedef struct sp_ecc_ctx {
  * Use the number of bits in a digit as indication of how code was compiled.
  *
  * @return  1 when the number of bits are the same.
- * @return  0 when the number of bits are differnt.
+ * @return  0 when the number of bits are different.
  */
 #define CheckFastMathSettings()   (SP_WORD_SIZE == CheckRunTimeFastMath())
 
@@ -664,12 +679,12 @@ typedef struct sp_ecc_ctx {
         (sp_int*)(((byte*)(t)) + MP_INT_SIZEOF(cnt))
 
 /**
- * A reuslt of NO.
+ * A result of NO.
  * e.g. Is prime? NO.
  */
 #define MP_NO      0
 /**
- * A reuslt of YES.
+ * A result of YES.
  * e.g. Is prime? YES.
  */
 #define MP_YES     1
@@ -708,6 +723,11 @@ typedef struct sp_ecc_ctx {
 #define MP_NOT_INF      (-5)
 /* Unused error. Defined for backward compatability. */
 #define MP_RANGE        MP_NOT_INF
+
+#ifdef USE_FAST_MATH
+/* For old FIPS, need FP_MEM defined for old implementation. */
+#define FP_MEM          (-2)
+#endif
 
 /* Number of bits in each word/digit. */
 #define DIGIT_BIT  SP_WORD_SIZE
@@ -756,9 +776,9 @@ typedef struct sp_int {
     sp_int_digit dp[SP_INT_DIGITS];
 } sp_int;
 
-/* Mulit-precision integer type is SP integer type. */
+/* Multi-precision integer type is SP integer type. */
 typedef sp_int       mp_int;
-/* Mulit-precision integer digit type is SP integer digit type.
+/* Multi-precision integer digit type is SP integer digit type.
  * Type is unsigned.
  */
 typedef sp_int_digit mp_digit;
@@ -816,7 +836,7 @@ MP_API int sp_mul_d(sp_int* a, sp_int_digit d, sp_int* r);
 MP_API int sp_div_d(sp_int* a, sp_int_digit d, sp_int* r, sp_int_digit* rem);
 #endif
 #if defined(WOLFSSL_SP_MATH_ALL) || (defined(HAVE_ECC) && \
-    defined(HAVE_COMP_KEY))
+    defined(HAVE_COMP_KEY)) || defined(OPENSSL_EXTRA)
 MP_API int sp_mod_d(sp_int* a, sp_int_digit d, sp_int_digit* r);
 #endif
 #if defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC)
@@ -831,7 +851,8 @@ MP_API int sp_sub(sp_int* a, sp_int* b, sp_int* r);
     defined(WOLFCRYPT_HAVE_ECCSI) || defined(WOLFCRYPT_HAVE_SAKKE)
 MP_API int sp_addmod(sp_int* a, sp_int* b, sp_int* m, sp_int* r);
 #endif
-#if defined(WOLFSSL_SP_MATH_ALL) && !defined(WOLFSSL_RSA_VERIFY_ONLY)
+#if defined(WOLFSSL_SP_MATH_ALL) && (!defined(WOLFSSL_RSA_VERIFY_ONLY) || \
+    defined(HAVE_ECC))
 MP_API int sp_submod(sp_int* a, sp_int* b, sp_int* m, sp_int* r);
 #endif
 #if defined(WOLFSSL_SP_MATH_ALL) && defined(HAVE_ECC)
@@ -898,11 +919,17 @@ MP_API int sp_prime_is_prime_ex(mp_int* a, int t, int* result, WC_RNG* rng);
 #if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN)
 MP_API int sp_gcd(sp_int* a, sp_int* b, sp_int* r);
 #endif
-#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN) && !defined(WC_RSA_BLINDING)
+#if !defined(NO_RSA) && defined(WOLFSSL_KEY_GEN) && \
+    (!defined(WC_RSA_BLINDING) || defined(HAVE_FIPS) || defined(HAVE_SELFTEST))
 MP_API int sp_lcm(sp_int* a, sp_int* b, sp_int* r);
 #endif
 
 WOLFSSL_API word32 CheckRunTimeFastMath(void);
+
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+WOLFSSL_LOCAL void sp_memzero_add(const char* name, mp_int* mp);
+WOLFSSL_LOCAL void sp_memzero_check(mp_int* mp);
+#endif
 
 
 /* Map mp functions to SP math versions. */
@@ -994,6 +1021,9 @@ WOLFSSL_API word32 CheckRunTimeFastMath(void);
 #define mp_prime_is_prime_ex                sp_prime_is_prime_ex
 #define mp_gcd                              sp_gcd
 #define mp_lcm                              sp_lcm
+
+#define mp_memzero_add                      sp_memzero_add
+#define mp_memzero_check                    sp_memzero_check
 
 #ifdef WOLFSSL_DEBUG_MATH
 #define mp_dump(d, a, v)                    sp_print(a, d)

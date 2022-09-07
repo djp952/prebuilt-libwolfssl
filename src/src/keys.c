@@ -1,6 +1,6 @@
 /* keys.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -49,6 +49,7 @@ int SetCipherSpecs(WOLFSSL* ssl)
         /* server side verified before SetCipherSpecs call */
         if (VerifyClientSuite(ssl) != 1) {
             WOLFSSL_MSG("SetCipherSpecs() client has an unusable suite");
+            WOLFSSL_ERROR_VERBOSE(UNSUPPORTED_SUITE);
             return UNSUPPORTED_SUITE;
         }
     }
@@ -1226,9 +1227,41 @@ int SetCipherSpecs(WOLFSSL* ssl)
         }
     }
 
+    if (ssl->options.cipherSuite0 == ECDHE_PSK_BYTE) {
+
+    switch (ssl->options.cipherSuite) {
+
+#if defined(HAVE_ECC) || defined(HAVE_CURVE25519) || defined(HAVE_CURVE448)
+#ifdef BUILD_TLS_ECDHE_PSK_WITH_AES_128_GCM_SHA256
+    case TLS_ECDHE_PSK_WITH_AES_128_GCM_SHA256 :
+        ssl->specs.bulk_cipher_algorithm = wolfssl_aes_gcm;
+        ssl->specs.cipher_type           = aead;
+        ssl->specs.mac_algorithm         = sha256_mac;
+        ssl->specs.kea                   = ecdhe_psk_kea;
+        ssl->specs.sig_algo              = anonymous_sa_algo;
+        ssl->specs.hash_size             = WC_SHA256_DIGEST_SIZE;
+        ssl->specs.pad_size              = PAD_SHA;
+        ssl->specs.static_ecdh           = 0;
+        ssl->specs.key_size              = AES_128_KEY_SIZE;
+        ssl->specs.block_size            = AES_BLOCK_SIZE;
+        ssl->specs.iv_size               = AES_IV_SIZE;
+        ssl->specs.aead_mac_size         = AES_GCM_AUTH_SZ;
+
+        ssl->options.usingPSK_cipher     = 1;
+        break;
+#endif
+#endif
+
+    default:
+        break;
+    }
+    }
+
+
     if (ssl->options.cipherSuite0 != ECC_BYTE &&
-            ssl->options.cipherSuite0 != CHACHA_BYTE &&
-            ssl->options.cipherSuite0 != TLS13_BYTE) {   /* normal suites */
+        ssl->options.cipherSuite0 != ECDHE_PSK_BYTE &&
+        ssl->options.cipherSuite0 != CHACHA_BYTE &&
+        ssl->options.cipherSuite0 != TLS13_BYTE) {   /* normal suites */
     switch (ssl->options.cipherSuite) {
 
 #ifdef BUILD_SSL_RSA_WITH_RC4_128_SHA
@@ -2024,6 +2057,7 @@ int SetCipherSpecs(WOLFSSL* ssl)
 
     default:
         WOLFSSL_MSG("Unsupported cipher suite, SetCipherSpecs");
+        WOLFSSL_ERROR_VERBOSE(UNSUPPORTED_SUITE);
         return UNSUPPORTED_SUITE;
     }  /* switch */
     }  /* if ECC / Normal suites else */
@@ -2049,6 +2083,15 @@ int SetCipherSpecs(WOLFSSL* ssl)
 #endif
     }
 
+#ifdef WOLFSSL_DTLS13
+    if (ssl->options.dtls &&
+        ssl->version.major == DTLS_MAJOR &&
+        ssl->version.minor <= DTLSv1_3_MINOR) {
+            ssl->options.tls = 1;
+            ssl->options.tls1_3 = 1;
+    }
+#endif /* WOLFSSL_DTLS13 */
+
 #if defined(HAVE_ENCRYPT_THEN_MAC) && !defined(WOLFSSL_AEAD_ONLY)
     if (IsAtLeastTLSv1_3(ssl->version) || ssl->specs.cipher_type != block)
        ssl->options.encThenMac = 0;
@@ -2063,6 +2106,11 @@ int SetCipherSpecs(WOLFSSL* ssl)
         ssl->hmac = Renesas_cmn_TLS_hmac;
         #endif
 #endif
+
+    if (ssl->specs.sig_algo == anonymous_sa_algo) {
+        /* CLIENT/SERVER: No peer authentication to be performed. */
+        ssl->options.peerAuthGood = 1;
+    }
 
     return 0;
 }
@@ -2186,11 +2234,21 @@ static int SetKeys(Ciphers* enc, Ciphers* dec, Keys* keys, CipherSpecs* specs,
                     (ChaCha*)XMALLOC(sizeof(ChaCha), heap, DYNAMIC_TYPE_CIPHER);
         if (enc && enc->chacha == NULL)
             return MEMORY_E;
+    #ifdef WOLFSSL_CHECK_MEM_ZERO
+        if (enc) {
+            wc_MemZero_Add("SSL keys enc chacha", enc->chacha, sizeof(ChaCha));
+        }
+    #endif
         if (dec && dec->chacha == NULL)
             dec->chacha =
                     (ChaCha*)XMALLOC(sizeof(ChaCha), heap, DYNAMIC_TYPE_CIPHER);
         if (dec && dec->chacha == NULL)
             return MEMORY_E;
+    #ifdef WOLFSSL_CHECK_MEM_ZERO
+        if (dec) {
+            wc_MemZero_Add("SSL keys dec chacha", dec->chacha, sizeof(ChaCha));
+        }
+    #endif
         if (side == WOLFSSL_CLIENT_END) {
             if (enc) {
                 chachaRet = wc_Chacha_SetKey(enc->chacha, keys->client_write_key,
@@ -2776,6 +2834,10 @@ static int SetAuthKeys(OneTimeAuth* authentication, Keys* keys,
                 (Poly1305*)XMALLOC(sizeof(Poly1305), heap, DYNAMIC_TYPE_CIPHER);
         if (authentication && authentication->poly1305 == NULL)
             return MEMORY_E;
+    #ifdef WOLFSSL_CHECK_MEM_ZERO
+        wc_MemZero_Add("SSL auth keys poly1305", authentication->poly1305,
+            sizeof(Poly1305));
+    #endif
         if (authentication)
             authentication->setup = 1;
 #endif
@@ -2922,9 +2984,19 @@ int SetKeysSide(WOLFSSL* ssl, enum encrypt_side side)
                       ssl->heap, ssl->devId, ssl->rng, ssl->options.tls1_3);
     }
 
+#ifdef WOLFSSL_DTLS13
+    if (ret == 0 && ssl->options.dtls && IsAtLeastTLSv1_3(ssl->version))
+        ret = Dtls13SetRecordNumberKeys(ssl, side);
+#endif /* WOLFSSL_DTLS13 */
+#ifdef WOLFSSL_QUIC
+    if (ret == 0 && WOLFSSL_IS_QUIC(ssl)) {
+        ret = wolfSSL_quic_keys_active(ssl, side);
+    }
+#endif /* WOLFSSL_QUIC */
+
 #ifdef HAVE_SECURE_RENEGOTIATION
 #ifdef WOLFSSL_DTLS
-    if (ret == 0 && ssl->options.dtls) {
+    if (ret == 0 && ssl->options.dtls && !ssl->options.tls1_3) {
         if (wc_encrypt)
             wc_encrypt->src = keys == &ssl->keys ? KEYS : SCR;
         if (wc_decrypt)
@@ -3445,7 +3517,7 @@ int MakeMasterSecret(WOLFSSL* ssl)
 #ifndef NO_OLD_TLS
     if (ssl->options.tls) return MakeTlsMasterSecret(ssl);
     return MakeSslMasterSecret(ssl);
-#elif !defined(WOLFSSL_NO_TLS12)
+#elif !defined(WOLFSSL_NO_TLS12) && !defined(NO_TLS)
     return MakeTlsMasterSecret(ssl);
 #else
     (void)ssl;

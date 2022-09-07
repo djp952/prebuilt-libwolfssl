@@ -1,6 +1,6 @@
 /* port.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -75,10 +75,13 @@
 #endif
 
 #if defined(WOLFSSL_IMX6_CAAM) || defined(WOLFSSL_IMX6_CAAM_RNG) || \
-    defined(WOLFSSL_IMX6UL_CAAM) || defined(WOLFSSL_IMX6_CAAM_BLOB)
+    defined(WOLFSSL_IMX6UL_CAAM) || defined(WOLFSSL_IMX6_CAAM_BLOB) || \
+    defined(WOLFSSL_SECO_CAAM)
     #include <wolfssl/wolfcrypt/port/caam/wolfcaam.h>
 #endif
-
+#if defined(WOLFSSL_DEVCRYPTO)
+    #include <wolfssl/wolfcrypt/port/devcrypto/wc_devcrypto.h>
+#endif
 #ifdef WOLFSSL_IMXRT_DCP
     #include <wolfssl/wolfcrypt/port/nxp/dcp_port.h>
 #endif
@@ -123,11 +126,18 @@ static volatile int initRefCount = 0;
 /* Used to initialize state for wolfcrypt
    return 0 on success
  */
+WOLFSSL_ABI
 int wolfCrypt_Init(void)
 {
     int ret = 0;
     if (initRefCount == 0) {
         WOLFSSL_ENTER("wolfCrypt_Init");
+
+    #ifdef WOLFSSL_CHECK_MEM_ZERO
+        /* Initialize the mutex for access to the list of memory locations that
+         * must be freed. */
+        wc_MemZero_Init();
+    #endif
 
     #ifdef WOLFSSL_FORCE_MALLOC_FAIL_TEST
         {
@@ -135,7 +145,7 @@ int wolfCrypt_Init(void)
             time_t seed = time(NULL);
             srand((word32)seed);
             rngMallocFail = rand() % 2000; /* max 2000 */
-            printf("\n--- RNG MALLOC FAIL AT %u ---\n", rngMallocFail);
+            fprintf(stderr, "\n--- RNG MALLOC FAIL AT %u ---\n", rngMallocFail);
             wolfSSL_SetMemFailCount(rngMallocFail);
         }
     #endif
@@ -305,8 +315,15 @@ int wolfCrypt_Init(void)
         }
 #endif
 
+#if defined(WOLFSSL_DEVCRYPTO)
+        if ((ret = wc_DevCryptoInit()) != 0) {
+            return ret;
+        }
+#endif
+
 #if defined(WOLFSSL_IMX6_CAAM) || defined(WOLFSSL_IMX6_CAAM_RNG) || \
-    defined(WOLFSSL_IMX6UL_CAAM) || defined(WOLFSSL_IMX6_CAAM_BLOB)
+    defined(WOLFSSL_IMX6UL_CAAM) || defined(WOLFSSL_IMX6_CAAM_BLOB) || \
+    defined(WOLFSSL_SECO_CAAM)
         if ((ret = wc_caamInit()) != 0) {
             return ret;
         }
@@ -345,6 +362,7 @@ long wolfCrypt_heap_peakBytes_checkpoint(void) {
 #endif
 
 /* return success value is the same as wolfCrypt_Init */
+WOLFSSL_ABI
 int wolfCrypt_Cleanup(void)
 {
     int ret = 0;
@@ -390,7 +408,8 @@ int wolfCrypt_Cleanup(void)
     #endif
 
     #if defined(WOLFSSL_IMX6_CAAM) || defined(WOLFSSL_IMX6_CAAM_RNG) || \
-        defined(WOLFSSL_IMX6_CAAM_BLOB)
+        defined(WOLFSSL_IMX6_CAAM_BLOB)  || \
+        defined(WOLFSSL_SECO_CAAM)
         wc_caamFree();
     #endif
     #if defined(WOLFSSL_CRYPTOCELL)
@@ -402,12 +421,21 @@ int wolfCrypt_Cleanup(void)
     #if defined(WOLFSSL_RENESAS_TSIP_CRYPT)
         tsip_Close();
     #endif
+    #if defined(WOLFSSL_DEVCRYPTO)
+        wc_DevCryptoCleanup();
+    #endif
     #if defined(WOLFSSL_DSP) && !defined(WOLFSSL_DSP_BUILD)
         rpcmem_deinit();
         wolfSSL_CleanupHandle();
     #endif
     #if defined(WOLFSSL_LINUXKM_SIMD_X86)
         free_wolfcrypt_linuxkm_fpu_states();
+    #endif
+
+    #ifdef WOLFSSL_CHECK_MEM_ZERO
+        /* Free the mutex for access to the list of memory locations that
+         * must be freed. */
+        wc_MemZero_Free();
     #endif
     }
 
@@ -828,7 +856,8 @@ void wc_ReadDirClose(ReadDirCtx* ctx)
     }
 #else
     if (ctx->dir) {
-        closedir(ctx->dir);
+        if (closedir(ctx->dir) < 0)
+            WOLFSSL_MSG("closedir() failed");
         ctx->dir = NULL;
     }
 #endif
@@ -1003,6 +1032,54 @@ size_t wc_strlcat(char *dst, const char *src, size_t dstSize)
     return dstLen + wc_strlcpy(dst + dstLen, src, dstSize - dstLen);
 }
 #endif /* USE_WOLF_STRLCAT */
+
+#ifndef SINGLE_THREADED
+/* TODO: use atomic operations instead of mutex */
+void wolfSSL_RefInit(wolfSSL_Ref* ref, int* err)
+{
+    int ret = wc_InitMutex(&ref->mutex);
+    if (ret != 0) {
+        WOLFSSL_MSG("Failed to create mutex for reference counting!");
+    }
+    ref->count = 1;
+
+    *err = ret;
+}
+
+void wolfSSL_RefFree(wolfSSL_Ref* ref)
+{
+    if (wc_FreeMutex(&ref->mutex) != 0) {
+        WOLFSSL_MSG("Failed to free mutex of reference counting!");
+    }
+}
+
+void wolfSSL_RefInc(wolfSSL_Ref* ref, int* err)
+{
+    int ret = wc_LockMutex(&ref->mutex);
+    if (ret != 0) {
+        WOLFSSL_MSG("Failed to lock mutex for reference increment!");
+    }
+    else {
+        ref->count++;
+        wc_UnLockMutex(&ref->mutex);
+    }
+    *err = ret;
+}
+
+void wolfSSL_RefDec(wolfSSL_Ref* ref, int* isZero, int* err)
+{
+    int ret = wc_LockMutex(&ref->mutex);
+    if (ret != 0) {
+        WOLFSSL_MSG("Failed to lock mutex for reference decrement!");
+    }
+    else {
+        ref->count--;
+        *isZero = (ref->count == 0);
+        wc_UnLockMutex(&ref->mutex);
+    }
+    *err = ret;
+}
+#endif
 
 #if WOLFSSL_CRYPT_HW_MUTEX
 /* Mutex for protection of cryptography hardware */
@@ -1270,7 +1347,7 @@ int wolfSSL_CryptHwMutexUnLock(void)
             return BAD_MUTEX_E;
     }
 
-#elif defined(WOLFSSL_KTHREADS)
+#elif defined(WOLFSSL_LINUXKM)
 
     /* Linux kernel mutex routines are voids, alas. */
 
@@ -2170,6 +2247,39 @@ int wolfSSL_CryptHwMutexUnLock(void)
             return BAD_MUTEX_E;
         }
 
+        return 0;
+    }
+
+#elif defined(WOLFSSL_EMBOS)
+
+    int wc_InitMutex(wolfSSL_Mutex* m)
+    {
+        int ret;
+
+        OS_MUTEX_Create((OS_MUTEX*) m);
+        if (m != NULL)
+            ret = 0;
+        else
+            ret = BAD_MUTEX_E;
+
+        return ret;
+    }
+
+    int wc_FreeMutex(wolfSSL_Mutex* m)
+    {
+        OS_MUTEX_Delete((OS_MUTEX*) m);
+        return 0;
+    }
+
+    int wc_LockMutex(wolfSSL_Mutex* m)
+    {
+        OS_MUTEX_LockBlocked((OS_MUTEX*) m);
+        return 0;
+    }
+
+    int wc_UnLockMutex(wolfSSL_Mutex* m)
+    {
+        OS_MUTEX_Unlock((OS_MUTEX*) m);
         return 0;
     }
 

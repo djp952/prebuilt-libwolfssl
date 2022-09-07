@@ -1,6 +1,6 @@
 /* dh.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -33,33 +33,37 @@
 #endif
 
 #ifndef WOLFSSL_DH_TYPE_DEFINED /* guard on redeclaration */
-typedef struct WOLFSSL_DH            WOLFSSL_DH;
-#define WOLFSSL_DH_TYPE_DEFINED
+    typedef struct WOLFSSL_DH       WOLFSSL_DH;
+    #define WOLFSSL_DH_TYPE_DEFINED
 #endif
-
-typedef WOLFSSL_DH                   DH;
 
 struct WOLFSSL_DH {
     WOLFSSL_BIGNUM* p;
     WOLFSSL_BIGNUM* g;
     WOLFSSL_BIGNUM* q;
-    WOLFSSL_BIGNUM* pub_key;      /* openssh deference g^x */
-    WOLFSSL_BIGNUM* priv_key;     /* openssh deference x   */
+    WOLFSSL_BIGNUM* pub_key;     /* openssh deference g^x */
+    WOLFSSL_BIGNUM* priv_key;    /* openssh deference x   */
     void*          internal;     /* our DH */
     char           inSet;        /* internal set from external ? */
     char           exSet;        /* external set from internal ? */
     /*added for lighttpd openssl compatibility, go back and add a getter in
      * lighttpd src code.
      */
-     int length;
+    int length;
+#ifndef SINGLE_THREADED
+    wolfSSL_Mutex refMutex;      /* ref count mutex */
+#endif
+    int refCount;                /* reference count */
 };
 
 WOLFSSL_API WOLFSSL_DH *wolfSSL_d2i_DHparams(WOLFSSL_DH **dh,
                                          const unsigned char **pp, long length);
 WOLFSSL_API int wolfSSL_i2d_DHparams(const WOLFSSL_DH *dh, unsigned char **out);
 WOLFSSL_API WOLFSSL_DH* wolfSSL_DH_new(void);
+WOLFSSL_API WOLFSSL_DH* wolfSSL_DH_new_by_nid(int nid);
 WOLFSSL_API void        wolfSSL_DH_free(WOLFSSL_DH* dh);
 WOLFSSL_API WOLFSSL_DH* wolfSSL_DH_dup(WOLFSSL_DH* dh);
+WOLFSSL_API int         wolfSSL_DH_up_ref(WOLFSSL_DH* dh);
 
 WOLFSSL_API int wolfSSL_DH_check(const WOLFSSL_DH *dh, int *codes);
 WOLFSSL_API int wolfSSL_DH_size(WOLFSSL_DH* dh);
@@ -74,8 +78,14 @@ WOLFSSL_API int wolfSSL_DH_set0_pqg(WOLFSSL_DH *dh, WOLFSSL_BIGNUM *p,
 
 WOLFSSL_API WOLFSSL_DH* wolfSSL_DH_get_2048_256(void);
 
-#define DH_new  wolfSSL_DH_new
-#define DH_free wolfSSL_DH_free
+#if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
+
+typedef WOLFSSL_DH                   DH;
+
+#define DH_new        wolfSSL_DH_new
+#define DH_free       wolfSSL_DH_free
+#define DH_up_ref     wolfSSL_DH_up_ref
+#define DH_new_by_nid wolfSSL_DH_new_by_nid
 
 #define d2i_DHparams    wolfSSL_d2i_DHparams
 #define i2d_DHparams    wolfSSL_i2d_DHparams
@@ -113,13 +123,18 @@ WOLFSSL_API WOLFSSL_DH* wolfSSL_DH_get_2048_256(void);
 
 #define DH_get_2048_256 wolfSSL_DH_get_2048_256
 
-#ifdef __cplusplus
-    }  /* extern "C" */
-#endif
-
 #if defined(OPENSSL_ALL) || defined(HAVE_STUNNEL)
 #define DH_generate_parameters    wolfSSL_DH_generate_parameters
 #define DH_generate_parameters_ex wolfSSL_DH_generate_parameters_ex
 #endif /* OPENSSL_ALL || HAVE_STUNNEL */
+
+#define DH_GENERATOR_2 2
+#define DH_GENERATOR_5 5
+
+#endif /* OPENSSL_EXTRA || OPENSSL_EXTRA_X509_SMALL */
+
+#ifdef __cplusplus
+    }  /* extern "C" */
+#endif
 
 #endif /* WOLFSSL_DH_H_ */

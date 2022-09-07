@@ -1,6 +1,6 @@
 /* sha.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -107,7 +107,7 @@ enum {
     #include "wolfssl/wolfcrypt/port/caam/wolfcaam_sha.h"
 #elif defined(WOLFSSL_RENESAS_TSIP_CRYPT) && \
    !defined(NO_WOLFSSL_RENESAS_TSIP_CRYPT_HASH)
-    #include "wolfssl/wolfcrypt/port/Renesas/renesas-tsip-crypt.h"
+    #include "wolfssl/wolfcrypt/port/Renesas/renesas_tsip_types.h"
 #else
 
 #if defined(WOLFSSL_SE050) && defined(WOLFSSL_SE050_HASH)
@@ -155,6 +155,11 @@ struct wc_Sha {
     #ifdef WOLF_CRYPTO_CB
         int    devId;
         void*  devCtx; /* generic crypto callback context */
+    #endif
+    #if defined(WOLFSSL_DEVCRYPTO_HASH) || defined(WOLFSSL_HASH_KEEP)
+        byte*  msg;
+        word32 used;
+        word32 len;
     #endif
 #endif
 #if defined(WOLFSSL_ESP32WROOM32_CRYPT) && \

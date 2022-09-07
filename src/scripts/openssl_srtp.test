@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Test WolfSSL/OpenSSL srtp interoperability
 #
 # TODO: add OpenSSL client with WolfSSL server
@@ -15,7 +15,18 @@ WOLFSSL_CLIENT=${WOLFSSL_CLIENT:="./examples/client/client"}
 
 # need a unique port since may run the same time as testsuite
 generate_port() {
-    port=$(($(od -An -N2 /dev/random) % (65535-49512) + 49512))
+    #-------------------------------------------------------------------------#
+    # Generate a random port number
+    #-------------------------------------------------------------------------#
+
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        port=$(($(od -An -N2 /dev/urandom) % (65535-49512) + 49512))
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        port=$(($(od -An -N2 /dev/random) % (65535-49512) + 49512))
+    else
+        echo "Unknown OS TYPE"
+        exit 1
+    fi
 }
 
 # get size of key material based on the profile
@@ -59,7 +70,7 @@ start_openssl_server() {
 
     server_output_file=/tmp/openssl_srtp_out
 
-    # hackish but OpenSSL doesn't work if input is feeded before handshaking and
+    # hackish but OpenSSL doesn't work if input is fed before handshaking and
     # the wolfSSL client needs a reply to stop
     (sleep 1;echo -n "I hear you fa shizzle...") | \
         ${OPENSSL} s_server \
@@ -120,7 +131,7 @@ check_dtls_srtp() {
     echo -n "check dtls $1 $2... "
     if [ $check_ret -ne 0 ];then
         echo "failed"
-        exit -1
+        exit 1
     else
         echo "ok"
     fi

@@ -23,7 +23,7 @@ dependency_libs=' -lm -ldl -lpthread'
 weak_library_names=''
 
 # Version information for libwolfssl.
-current=32
+current=35
 age=0
 revision=0
 

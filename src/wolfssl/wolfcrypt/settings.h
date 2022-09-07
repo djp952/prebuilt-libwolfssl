@@ -1,6 +1,6 @@
 /* settings.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -17,6 +17,27 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
+ */
+
+/*
+ *   ************************************************************************
+ *
+ *   ******************************** NOTICE ********************************
+ *
+ *   ************************************************************************
+ *
+ *   This method of uncommenting a line in settings.h is outdated.
+ *
+ *   Please use user_settings.h / WOLFSSL_USER_SETTINGS
+ *
+ *         or
+ *
+ *   ./configure CFLAGS="-DFLAG"
+ *
+ *   For more information see:
+ *
+ *   https://www.wolfssl.com/how-do-i-manage-the-build-configuration-of-wolfssl/
+ *
  */
 
 
@@ -193,6 +214,11 @@
 
 /* Uncomment next line if building for using Apache mynewt */
 /* #define WOLFSSL_APACHE_MYNEWT */
+
+/* For Espressif chips see example user_settings.h
+ *
+ * https://github.com/wolfSSL/wolfssl/blob/master/IDE/Espressif/ESP-IDF/user_settings.h
+ */
 
 /* Uncomment next line if building for using ESP-IDF */
 /* #define WOLFSSL_ESPIDF */
@@ -375,11 +401,13 @@
     #define SINGLE_THREADED
     #define WOLFSSL_USER_IO
     #define NO_FILESYSTEM
-    #define CUSTOM_RAND_TYPE uint16_t
-    #define CUSTOM_RAND_GENERATE random_rand
+    #ifndef CUSTOM_RAND_GENERATE
+        #define CUSTOM_RAND_TYPE uint16_t
+        #define CUSTOM_RAND_GENERATE random_rand
+    #endif
     static inline word32 LowResTimer(void)
     {
-        return clock_seconds();
+       return clock_seconds();
     }
 #endif
 
@@ -504,7 +532,9 @@
     #include "pico_stack.h"
     #include "pico_constants.h"
     #include "pico_protocol.h"
-    #define CUSTOM_RAND_GENERATE pico_rand
+    #ifndef CUSTOM_RAND_GENERATE
+        #define CUSTOM_RAND_GENERATE pico_rand
+    #endif
 #endif
 
 #ifdef WOLFSSL_PICOTCP_DEMO
@@ -535,8 +565,6 @@
     /* #define WOLFSSL_PTHREADS */
     #define WOLFSSL_HAVE_MIN
     #define WOLFSSL_HAVE_MAX
-    #define USE_FAST_MATH
-    #define TFM_TIMING_RESISTANT
     #define NO_MAIN_DRIVER
     #define NO_DEV_RANDOM
     #define NO_WRITEV
@@ -629,7 +657,6 @@
     #define USE_CERT_BUFFERS_2048   /* use when NO_FILESYSTEM */
     #define NO_MAIN_DRIVER
     #define NO_RC4
-    #define SINGLE_THREADED         /* Not ported at this time */
 #endif
 
 #ifdef WOLFSSL_RIOT_OS
@@ -768,7 +795,7 @@ extern void uITRON4_free(void *p) ;
     #include "FreeRTOS.h"
 
     #if !defined(XMALLOC_USER) && !defined(NO_WOLFSSL_MEMORY) && \
-        !defined(WOLFSSL_STATIC_MEMORY)
+        !defined(WOLFSSL_STATIC_MEMORY) && !defined(WOLFSSL_TRACK_MEMORY)
         #define XMALLOC(s, h, type)  pvPortMalloc((s))
         #define XFREE(p, h, type)    vPortFree((p))
         /* FreeRTOS pvPortRealloc() implementation can be found here:
@@ -823,16 +850,35 @@ extern void uITRON4_free(void *p) ;
     #define NO_MAIN_DRIVER
 #endif
 
+#ifdef WOLFSSL_TI_CRYPT
+    #define NO_GCM_ENCRYPT_EXTRA
+    #define NO_PUBLIC_GCM_SET_IV
+    #define NO_PUBLIC_CCM_SET_NONCE
+#endif
+
 #ifdef WOLFSSL_TIRTOS
     #define SIZEOF_LONG_LONG 8
     #define NO_WRITEV
     #define NO_WOLFSSL_DIR
-    #define USE_FAST_MATH
+
+    /* Use SP_MATH by default, unless
+     * specified in user_settings.
+     */
+    #ifndef USE_FAST_MATH
+        #define USE_SP_MATH
+        #define SP_MATH_ALL
+        #define WOLFSSL_HAVE_SP_ECC
+        #define SP_WORD_SIZE 32
+        #define WOLFSSL_HAVE_SP_RSA
+        #define WOLFSSL_SP_4096
+    #endif
     #define TFM_TIMING_RESISTANT
     #define ECC_TIMING_RESISTANT
     #define WC_RSA_BLINDING
     #define NO_DEV_RANDOM
     #define NO_FILESYSTEM
+    #define NO_SIG_WRAPPER
+    #define NO_MAIN_DRIVER
     #define USE_CERT_BUFFERS_2048
     #define NO_ERROR_STRINGS
     /* Uncomment this setting if your toolchain does not offer time.h header */
@@ -842,21 +888,13 @@ extern void uITRON4_free(void *p) ;
     #define USE_WOLF_STRTOK /* use with HAVE_ALPN */
     #define HAVE_TLS_EXTENSIONS
     #define HAVE_AESGCM
-    #ifdef WOLFSSL_TI_CRYPT
-        #define NO_GCM_ENCRYPT_EXTRA
-        #define NO_PUBLIC_GCM_SET_IV
-        #define NO_PUBLIC_CCM_SET_NONCE
-    #endif
     #define HAVE_SUPPORTED_CURVES
-    #define ALT_ECC_SIZE
-
     #ifdef __IAR_SYSTEMS_ICC__
         #pragma diag_suppress=Pa089
     #elif !defined(__GNUC__)
         /* Suppress the sslpro warning */
         #pragma diag_suppress=11
     #endif
-
     #include <ti/sysbios/hal/Seconds.h>
 #endif
 
@@ -915,9 +953,6 @@ extern void uITRON4_free(void *p) ;
 
 #ifdef WOLFSSL_GAME_BUILD
     #define SIZEOF_LONG_LONG 8
-    #if defined(__PPU) || defined(__XENON)
-        #define BIG_ENDIAN_ORDER
-    #endif
 #endif
 
 #ifdef WOLFSSL_LSR
@@ -1307,7 +1342,7 @@ extern void uITRON4_free(void *p) ;
         #define STM32_CRYPTO
 
         #if defined(WOLFSSL_STM32L4) || defined(WOLFSSL_STM32L5) || \
-            defined(WOLFSSL_STM32WB)
+            defined(WOLFSSL_STM32WB) || defined(WOLFSSL_STM32U5)
             #define NO_AES_192 /* hardware does not support 192-bit */
         #endif
     #endif
@@ -1466,7 +1501,9 @@ extern void uITRON4_free(void *p) ;
     #define HAVE_HASHDRBG
 
     #define HAVE_ECC
-    #define ALT_ECC_SIZE
+    #if !defined(WOLFSSL_STATIC_MEMORY) && !defined(WOLFSSL_NO_MALLOC)
+        #define ALT_ECC_SIZE
+    #endif
     #define TFM_ECC192
     #define TFM_ECC224
     #define TFM_ECC256
@@ -1486,6 +1523,8 @@ extern void uITRON4_free(void *p) ;
         #define CUSTOM_RAND_GENERATE Math_Rand
     #endif
     #define STRING_USER
+    #define XSTRCASECMP(s1,s2) strcasecmp((s1),(s2))
+    #define XSTRCMP(s1,s2) strcmp((s1),(s2))
     #define XSTRLEN(pstr) ((CPU_SIZE_T)Str_Len((CPU_CHAR *)(pstr)))
     #define XSTRNCPY(pstr_dest, pstr_src, len_max) \
                     ((CPU_CHAR *)Str_Copy_N((CPU_CHAR *)(pstr_dest), \
@@ -1630,9 +1669,12 @@ extern void uITRON4_free(void *p) ;
     #define WOLFSSL_AES_GCM_FIXED_IV_AAD
 #endif
 #ifdef WOLFSSL_KCAPI_ECC
+    #undef  ECC_USER_CURVES
     #define ECC_USER_CURVES
     #undef  NO_ECC256
+    #undef  HAVE_ECC384
     #define HAVE_ECC384
+    #undef  HAVE_ECC521
     #define HAVE_ECC521
 #endif
 
@@ -1731,6 +1773,15 @@ extern void uITRON4_free(void *p) ;
     #define USE_WOLFSSL_MEMORY
 #endif
 
+#ifdef WOLFSSL_EMBOS
+    #include "RTOS.h"
+    #if !defined(XMALLOC_USER) && !defined(NO_WOLFSSL_MEMORY) && \
+        !defined(WOLFSSL_STATIC_MEMORY)
+        #define XMALLOC(s, h, type)  OS_HEAP_malloc((s))
+        #define XFREE(p, h, type)    OS_HEAP_free((p))
+        #define XREALLOC(p, n, h, t) OS_HEAP_realloc(((p), (n))
+    #endif
+#endif
 
 #if defined(OPENSSL_EXTRA) && !defined(NO_CERTS)
     #undef  KEEP_PEER_CERT
@@ -1834,6 +1885,53 @@ extern void uITRON4_free(void *p) ;
     #pragma warning(disable:2259) /* explicit casts to smaller sizes, disable */
 #endif
 
+
+
+/* ---------------------------------------------------------------------------
+ * Math Library Selection (in order of preference)
+ * ---------------------------------------------------------------------------
+ */
+#if !defined(HAVE_FIPS_VERSION) || \
+    (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION >= 5))
+    #if defined(WOLFSSL_SP_MATH_ALL)
+        /*  1) SP Math: wolfSSL proprietary math implementation (sp_int.c).
+         *      Constant time: Always
+         *      Enable:        WOLFSSL_SP_MATH_ALL
+         */
+    #elif defined(WOLFSSL_SP_MATH)
+        /*  2) SP Math with restricted key sizes: wolfSSL proprietary math
+         *         implementation (sp_*.c).
+         *      Constant time: Always
+         *      Enable:        WOLFSSL_SP_MATH
+         */
+    #elif defined(USE_FAST_MATH)
+        /*  3) Tom's Fast Math: Stack based (tfm.c)
+         *      Constant time: Only with TFM_TIMING_RESISTANT
+         *      Enable:        USE_FAST_MATH
+         */
+    #elif defined(USE_INTEGER_HEAP_MATH)
+        /*  4) Integer Heap Math:  Heap based (integer.c)
+         *      Constant time: Not supported
+         *      Enable:        USE_INTEGER_HEAP_MATH
+         */
+    #else
+        /* default is SP Math. */
+        #define WOLFSSL_SP_MATH_ALL
+    #endif
+#else
+    /* FIPS 140-2 or older */
+    /* Default to fast math (tfm.c), but allow heap math (integer.c) */
+    #if !defined(USE_INTEGER_HEAP_MATH)
+        #undef  USE_FAST_MATH
+        #define USE_FAST_MATH
+        #define FP_MAX_BITS 8192
+    #endif
+#endif
+/*----------------------------------------------------------------------------*/
+
+
+
+
 /* user can specify what curves they want with ECC_USER_CURVES otherwise
  * all curves are on by default for now */
 #ifndef ECC_USER_CURVES
@@ -1843,7 +1941,7 @@ extern void uITRON4_free(void *p) ;
 #endif
 
 /* The minimum allowed ECC key size */
-/* Note: 224-bits is equivelant to 2048-bit RSA */
+/* Note: 224-bits is equivalent to 2048-bit RSA */
 #ifndef ECC_MIN_KEY_SZ
     #ifdef WOLFSSL_MIN_ECC_BITS
         #define ECC_MIN_KEY_SZ WOLFSSL_MIN_ECC_BITS
@@ -2027,7 +2125,9 @@ extern void uITRON4_free(void *p) ;
 
 #if !defined(HAVE_PUBLIC_FFDHE) && !defined(NO_DH) && \
     !defined(WOLFSSL_NO_PUBLIC_FFDHE) && \
-    (defined(HAVE_SELFTEST) || FIPS_VERSION_EQ(2,0))
+    (defined(HAVE_SELFTEST) || FIPS_VERSION_LE(2,0))
+    /* This should only be enabled for FIPS v2 or older. It enables use of the
+     * older wc_Dh_ffdhe####_Get() API's */
     #define HAVE_PUBLIC_FFDHE
 #endif
 
@@ -2039,25 +2139,26 @@ extern void uITRON4_free(void *p) ;
     #endif
 #endif
 #if defined(HAVE_FFDHE_8192)
-    #define MIN_FFDHE_FP_MAX_BITS 16384
+    #define MIN_FFDHE_BITS 8192
 #elif defined(HAVE_FFDHE_6144)
-    #define MIN_FFDHE_FP_MAX_BITS 12288
+    #define MIN_FFDHE_BITS 6144
 #elif defined(HAVE_FFDHE_4096)
-    #define MIN_FFDHE_FP_MAX_BITS 8192
+    #define MIN_FFDHE_BITS 4096
 #elif defined(HAVE_FFDHE_3072)
-    #define MIN_FFDHE_FP_MAX_BITS 6144
+    #define MIN_FFDHE_BITS 3072
 #elif defined(HAVE_FFDHE_2048)
-    #define MIN_FFDHE_FP_MAX_BITS 4096
+    #define MIN_FFDHE_BITS 2048
 #else
-    #define MIN_FFDHE_FP_MAX_BITS 0
+    #define MIN_FFDHE_BITS 0
 #endif
+#define MIN_FFDHE_FP_MAX_BITS   (MIN_FFDHE_BITS * 2)
 #if defined(HAVE_FFDHE) && defined(FP_MAX_BITS)
     #if MIN_FFDHE_FP_MAX_BITS > FP_MAX_BITS
         #error "FFDHE parameters are too large for FP_MAX_BIT as set"
     #endif
 #endif
 #if defined(HAVE_FFDHE) && defined(SP_INT_BITS)
-    #if MIN_FFDHE_FP_MAX_BITS > SP_INT_BITS * 2
+    #if MIN_FFDHE_BITS > SP_INT_BITS
         #error "FFDHE parameters are too large for SP_INT_BIT as set"
     #endif
 #endif
@@ -2066,16 +2167,18 @@ extern void uITRON4_free(void *p) ;
 #if defined(WOLFSSL_X86_64_BUILD) || defined(WOLFSSL_AARCH64_BUILD)
     #if defined(USE_FAST_MATH) && !defined(FP_MAX_BITS)
         #if MIN_FFDHE_FP_MAX_BITS <= 8192
-            #define FP_MAX_BITS 8192
+            #define FP_MAX_BITS     8192
         #else
-            #define FP_MAX_BITS MIN_FFDHE_FP_MAX_BITS
+            #define FP_MAX_BITS     MIN_FFDHE_FP_MAX_BITS
         #endif
     #endif
     #if defined(WOLFSSL_SP_MATH_ALL) && !defined(SP_INT_BITS)
-        #if MIN_FFDHE_FP_MAX_BITS <= 8192
-            #define SP_INT_BITS 4096
+        #ifdef WOLFSSL_MYSQL_COMPATIBLE
+            #define SP_INT_BITS     8192
+        #elif MIN_FFDHE_BITS <= 4096
+            #define SP_INT_BITS     4096
         #else
-            #define PS_INT_BITS MIN_FFDHE_FP_MAX_BITS / 2
+            #define SP_INT_BITS     MIN_FFDHE_BITS
         #endif
     #endif
 #endif
@@ -2174,9 +2277,9 @@ extern void uITRON4_free(void *p) ;
     #if defined(HAVE_IO_POOL) || defined(XMALLOC_USER) || defined(NO_WOLFSSL_MEMORY)
          #error static memory cannot be used with HAVE_IO_POOL, XMALLOC_USER or NO_WOLFSSL_MEMORY
     #endif
-    #if !defined(WOLFSSL_SP_NO_MALLOC) && \
-        !defined(USE_FAST_MATH) && !defined(NO_BIG_INT)
-         #error The static memory option is only supported for fast math or SP with no malloc
+    #if !defined(WOLFSSL_SP_MATH_ALL) && !defined(USE_FAST_MATH) && \
+        !defined(NO_BIG_INT)
+         #error The static memory option is only supported for fast math or SP Math
     #endif
     #ifdef WOLFSSL_SMALL_STACK
         #error static memory does not support small stack please undefine
@@ -2235,6 +2338,10 @@ extern void uITRON4_free(void *p) ;
 
 
 #ifdef WOLFSSL_LINUXKM
+    #ifdef HAVE_CONFIG_H
+        #include <config.h>
+        #undef HAVE_CONFIG_H
+    #endif
     #ifndef NO_DEV_RANDOM
         #define NO_DEV_RANDOM
     #endif
@@ -2292,8 +2399,8 @@ extern void uITRON4_free(void *p) ;
     #undef HAVE_GMTIME_R /* don't trust macro with windows */
 #endif /* WOLFSSL_MYSQL_COMPATIBLE */
 
-#if defined(OPENSSL_ALL) || defined(WOLFSSL_NGINX) || defined(WOLFSSL_HAPROXY) \
- || defined(HAVE_LIGHTY)
+#if (defined(OPENSSL_ALL) || defined(WOLFSSL_NGINX) || defined(WOLFSSL_HAPROXY) \
+ || defined(HAVE_LIGHTY)) && !defined(NO_TLS)
     #define OPENSSL_NO_ENGINE
     #ifndef OPENSSL_EXTRA
         #define OPENSSL_EXTRA
@@ -2409,6 +2516,16 @@ extern void uITRON4_free(void *p) ;
     #define KEEP_PEER_CERT
 #endif
 
+/*
+ * Keeps the "Finished" messages after a TLS handshake for use as the so-called
+ * "tls-unique" channel binding. See comment in internal.h around clientFinished
+ * and serverFinished for more information.
+ */
+#if defined(OPENSSL_ALL) || defined(WOLFSSL_HAPROXY) || defined(WOLFSSL_WPAS)
+    #undef  WOLFSSL_HAVE_TLS_UNIQUE
+    #define WOLFSSL_HAVE_TLS_UNIQUE
+#endif
+
 /* RAW hash function APIs are not implemented */
 #if defined(WOLFSSL_ARMASM) || defined(WOLFSSL_AFALG_HASH)
     #undef  WOLFSSL_NO_HASH_RAW
@@ -2459,8 +2576,7 @@ extern void uITRON4_free(void *p) ;
 
 #if defined(WOLFCRYPT_ONLY) && defined(NO_AES) && !defined(WOLFSSL_SHA384) && \
     !defined(WOLFSSL_SHA512) && defined(WC_NO_RNG) && \
-    (defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH_ALL)) && \
-    defined(WOLFSSL_RSA_PUBLIC_ONLY)
+    !defined(WOLFSSL_SP_MATH) && !defined(WOLFSSL_SP_MATH_ALL)
     #undef  WOLFSSL_NO_FORCE_ZERO
     #define WOLFSSL_NO_FORCE_ZERO
 #endif
@@ -2489,6 +2605,11 @@ extern void uITRON4_free(void *p) ;
 
 #ifdef NO_WOLFSSL_SMALL_STACK
     #undef WOLFSSL_SMALL_STACK
+#endif
+
+#if defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_SMALL_STACK_STATIC) && \
+    !defined(NO_WOLFSSL_SMALL_STACK_STATIC)
+#define WOLFSSL_SMALL_STACK_STATIC
 #endif
 
 #ifdef WOLFSSL_SMALL_STACK_STATIC
@@ -2548,6 +2669,12 @@ extern void uITRON4_free(void *p) ;
     #define NO_SHA2_CRYPTO_CB
 #endif
 
+/* Enable HAVE_ONE_TIME_AUTH by default for use with TLS cipher suites
+ * when poly1305 is enabled
+ */
+#if defined(HAVE_POLY1305) && !defined(HAVE_ONE_TIME_AUTH)
+    #define HAVE_ONE_TIME_AUTH
+#endif
 
 /* Check for insecure build combination:
  * secure renegotiation   [enabled]
@@ -2592,17 +2719,80 @@ extern void uITRON4_free(void *p) ;
  * group */
 #ifdef HAVE_LIBOQS
 #define HAVE_PQC
+#define HAVE_FALCON
+#define HAVE_DILITHIUM
+#define HAVE_KYBER
 #endif
 
-#if defined(HAVE_PQC) && !defined(HAVE_LIBOQS)
-#error "You must have a post-quantum cryptography implementation to use PQC."
+#ifdef HAVE_PQM4
+#define HAVE_PQC
+#define HAVE_KYBER
 #endif
 
+#if defined(HAVE_PQC) && !defined(HAVE_LIBOQS) && !defined(HAVE_PQM4)
+#error Please do not define HAVE_PQC yourself.
+#endif
+
+#if defined(HAVE_PQC) && defined(HAVE_LIBOQS) && defined(HAVE_PQM4)
+#error Please do not define both HAVE_LIBOQS and HAVE_PQM4.
+#endif
 
 /* SRTP requires DTLS */
 #if defined(WOLFSSL_SRTP) && !defined(WOLFSSL_DTLS)
     #error The SRTP extension requires DTLS
 #endif
+
+/* Are we using an external private key store like:
+ *     PKCS11 / HSM / crypto callback / PK callback */
+#if !defined(WOLF_PRIVATE_KEY_ID) && \
+    (defined(HAVE_PKCS11) || defined(HAVE_PK_CALLBACKS) || \
+     defined(WOLF_CRYPTO_CB) || defined(WOLFSSL_KCAPI))
+     /* Enables support for using wolfSSL_CTX_use_PrivateKey_Id and
+      *   wolfSSL_CTX_use_PrivateKey_Label */
+    #define WOLF_PRIVATE_KEY_ID
+#endif
+
+
+/* With titan cache size there is too many sessions to fit with the default
+ * multiplier of 8 */
+#if defined(TITAN_SESSION_CACHE) && !defined(NO_SESSION_CACHE_REF)
+    #define NO_SESSION_CACHE_REF
+#endif
+
+/* DTLS v1.3 requires 64-bit number wrappers */
+#if defined(WOLFSSL_DTLS13) && !defined(WOLFSSL_W64_WRAPPER)
+    #define WOLFSSL_W64_WRAPPER
+#endif
+
+/* DTLS v1.3 requires AES ECB if using AES */
+#if defined(WOLFSSL_DTLS13) && !defined(NO_AES) && \
+    !defined(WOLFSSL_AES_DIRECT)
+#define WOLFSSL_AES_DIRECT
+#endif
+
+#if defined(WOLFSSL_DTLS13) && (!defined(WOLFSSL_DTLS) || \
+                                !defined(WOLFSSL_TLS13))
+#error "DTLS v1.3 requires both WOLFSSL_TLS13 and WOLFSSL_DTLS"
+#endif
+
+#if defined(WOLFSSL_DTLS_CID) && !defined(WOLFSSL_DTLS13)
+#error "ConnectionID is supported for DTLSv1.3 only"
+#endif
+
+/* RSA Key Checking is disabled by default unless WOLFSSL_RSA_KEY_CHECK is
+ *   defined or FIPS v2 3389, FIPS v5 or later.
+ * Not allowed for:
+ *   RSA public only, CAVP selftest, fast RSA, user RSA, QAT or CryptoCell */
+#if (defined(WOLFSSL_RSA_KEY_CHECK) || (defined(HAVE_FIPS) && FIPS_VERSION_GE(2,0))) && \
+    !defined(WOLFSSL_NO_RSA_KEY_CHECK) && !defined(WOLFSSL_RSA_PUBLIC_ONLY) && \
+    !defined(HAVE_USER_RSA) && !defined(HAVE_FAST_RSA) && \
+    !defined(HAVE_INTEL_QA) && !defined(WOLFSSL_CRYPTOCELL) && \
+    !defined(HAVE_SELFTEST)
+
+    #undef  WOLFSSL_RSA_KEY_CHECK
+    #define WOLFSSL_RSA_KEY_CHECK
+#endif
+
 
 
 
@@ -2618,6 +2808,16 @@ extern void uITRON4_free(void *p) ;
     #define NO_RC4
 #endif
 
+#if !defined(WOLFSSL_NO_ASYNC_IO) || defined(WOLFSSL_ASYNC_CRYPT) || \
+     defined(WOLFSSL_NONBLOCK_OCSP)
+    /* Enable asynchronous support in TLS functions to support one or more of
+     * the following:
+     * - re-entry after a network blocking return
+     * - re-entry after OCSP blocking return
+     * - asynchronous cryptography */
+    #undef WOLFSSL_ASYNC_IO
+    #define WOLFSSL_ASYNC_IO
+#endif
 
 #ifdef __cplusplus
     }   /* extern "C" */

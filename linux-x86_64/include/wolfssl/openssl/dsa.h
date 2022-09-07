@@ -1,6 +1,6 @@
 /* dsa.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -40,8 +40,6 @@ typedef struct WOLFSSL_DSA_SIG {
 typedef struct WOLFSSL_DSA            WOLFSSL_DSA;
 #define WOLFSSL_DSA_TYPE_DEFINED
 #endif
-
-typedef WOLFSSL_DSA                   DSA;
 
 struct WOLFSSL_DSA {
     WOLFSSL_BIGNUM* p;
@@ -117,6 +115,10 @@ WOLFSSL_API int wolfSSL_i2d_DSAparams(
 WOLFSSL_API WOLFSSL_DSA* wolfSSL_d2i_DSAparams(
     WOLFSSL_DSA** dsa, const unsigned char** der, long derLen);
 
+#if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
+
+typedef WOLFSSL_DSA                   DSA;
+
 #define WOLFSSL_DSA_LOAD_PRIVATE 1
 #define WOLFSSL_DSA_LOAD_PUBLIC  2
 
@@ -145,6 +147,8 @@ WOLFSSL_API WOLFSSL_DSA* wolfSSL_d2i_DSAparams(
 #define d2i_DSAparams              wolfSSL_d2i_DSAparams
 
 #define DSA_SIG                    WOLFSSL_DSA_SIG
+
+#endif /* OPENSSL_EXTRA || OPENSSL_EXTRA_X509_SMALL */
 
 #ifdef __cplusplus
     }  /* extern "C" */

@@ -1,6 +1,6 @@
 /* hmac.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -55,6 +55,10 @@
     #include <wolfssl/wolfcrypt/async.h>
 #endif
 
+#if defined(WOLFSSL_DEVCRYPTO_AES) || defined(WOLFSSL_DEVCRYPTO_HMAC)
+    #include <wolfssl/wolfcrypt/port/devcrypto/wc_devcrypto.h>
+#endif
+
 #ifndef NO_OLD_WC_NAMES
     #define HMAC_BLOCK_SIZE WC_HMAC_BLOCK_SIZE
 #endif
@@ -99,7 +103,7 @@ enum {
     WC_SHA3_384 = WC_HASH_TYPE_SHA3_384,
     WC_SHA3_512 = WC_HASH_TYPE_SHA3_512,
 #endif
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
     HMAC_MAX_ID_LEN    = 32,
     HMAC_MAX_LABEL_LEN = 32,
 #endif
@@ -155,12 +159,15 @@ struct Hmac {
 #ifdef WOLFSSL_ASYNC_CRYPT
     WC_ASYNC_DEV asyncDev;
 #endif /* WOLFSSL_ASYNC_CRYPT */
+#if defined(WOLFSSL_DEVCRYPTO) && defined(WOLFSSL_DEVCRYPTO_HMAC)
+    WC_CRYPTODEV ctx;
+#endif
 #ifdef WOLF_CRYPTO_CB
     int     devId;
     void*   devCtx;
     const byte* keyRaw;
 #endif
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
     byte    id[HMAC_MAX_ID_LEN];
     int     idLen;
     char    label[HMAC_MAX_LABEL_LEN];
@@ -192,7 +199,7 @@ WOLFSSL_API int wc_HmacFinal_Software(Hmac* hmac, byte* out);
 WOLFSSL_API int wc_HmacSizeByType(int type);
 
 WOLFSSL_API int wc_HmacInit(Hmac* hmac, void* heap, int devId);
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
 WOLFSSL_API int wc_HmacInit_Id(Hmac* hmac, byte* id, int len, void* heap,
                                int devId);
 WOLFSSL_API int wc_HmacInit_Label(Hmac* hmac, const char* label, void* heap,
@@ -210,7 +217,7 @@ WOLFSSL_API int wc_HKDF_Extract(int type, const byte* salt, word32 saltSz,
                                 const byte* inKey, word32 inKeySz, byte* out);
 WOLFSSL_API int wc_HKDF_Expand(int type, const byte* inKey, word32 inKeySz,
                                const byte* info, word32 infoSz,
-                               byte* out,        word32 outSz);
+                               byte* out, word32 outSz);
 
 WOLFSSL_API int wc_HKDF(int type, const byte* inKey, word32 inKeySz,
                     const byte* salt, word32 saltSz,

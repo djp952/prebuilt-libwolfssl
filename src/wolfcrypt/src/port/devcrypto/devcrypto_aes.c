@@ -1,6 +1,6 @@
 /* devcrypto_aes.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -208,7 +208,6 @@ int wc_AesCtrEncrypt(Aes* aes, byte* out, const byte* in, word32 sz)
     int ret;
     struct crypt_op crt;
     byte* tmp;
-    int ret;
 
     if (aes == NULL || out == NULL || in == NULL) {
         return BAD_FUNC_ARG;

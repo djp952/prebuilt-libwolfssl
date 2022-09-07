@@ -1,6 +1,6 @@
 /* cmac.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -27,6 +27,9 @@
 #include <wolfssl/wolfcrypt/settings.h>
 #ifdef WOLFSSL_QNX_CAAM
 #include <wolfssl/wolfcrypt/port/caam/wolfcaam.h>
+#endif
+#if defined(WOLFSSL_HASH_KEEP)
+#include <wolfssl/wolfcrypt/hash.h>
 #endif
 
 #if defined(WOLFSSL_CMAC) && !defined(NO_AES) && defined(WOLFSSL_AES_DIRECT)
@@ -55,6 +58,18 @@
 #ifdef WOLF_CRYPTO_CB
     #include <wolfssl/wolfcrypt/cryptocb.h>
 #endif
+
+#ifdef WOLFSSL_HASH_KEEP
+/* Some hardware have issues with update, this function stores the data to be
+ * hashed into an array. Once ready, the Final operation is called on all of the
+ * data to be hashed at once.
+ * returns 0 on success
+ */
+int wc_CMAC_Grow(Cmac* cmac, const byte* in, int inSz)
+{
+    return _wc_Hash_Grow(&cmac->msg, &cmac->used, &cmac->len, in, inSz, NULL);
+}
+#endif /* WOLFSSL_HASH_KEEP */
 
 
 /* Used by AES-SIV. See aes.c. */
@@ -86,7 +101,7 @@ int wc_InitCmac_ex(Cmac* cmac, const byte* key, word32 keySz,
     (void)unused;
     (void)heap;
 
-    if (cmac == NULL || keySz == 0 || type != WC_CMAC_AES) {
+    if (cmac == NULL || type != WC_CMAC_AES) {
         return BAD_FUNC_ARG;
     }
 
@@ -107,7 +122,7 @@ int wc_InitCmac_ex(Cmac* cmac, const byte* key, word32 keySz,
     (void)devId;
 #endif
 
-    if (key == NULL) {
+    if (key == NULL || keySz == 0) {
         return BAD_FUNC_ARG;
     }
 
@@ -226,6 +241,15 @@ int wc_CmacFinal(Cmac* cmac, byte* out, word32* outSz)
         XMEMCPY(out, cmac->digest, *outSz);
     }
 
+#if defined(WOLFSSL_HASH_KEEP)
+    /* TODO: msg is leaked if wc_CmacFinal() is not called
+     * e.g. when multiple calls to wc_CmacUpdate() and one fails but
+     * wc_CmacFinal() not called. */
+    if (cmac->msg != NULL) {
+        XFREE(cmac->msg, cmac->heap, DYNAMIC_TYPE_TMP_BUFFER);
+        cmac->msg = NULL;
+    }
+#endif
     wc_AesFree(&cmac->aes);
     ForceZero(cmac, sizeof(Cmac));
 
@@ -254,6 +278,11 @@ int wc_AesCmacGenerate(byte* out, word32* outSz,
         return MEMORY_E;
     }
 #endif
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+    /* Aes part is checked by wc_AesFree. */
+    wc_MemZero_Add("wc_AesCmacGenerate cmac",
+        ((unsigned char *)cmac) + sizeof(Aes), sizeof(Cmac) - sizeof(Aes));
+#endif
 
     ret = wc_InitCmac(cmac, key, keySz, WC_CMAC_AES, NULL);
     if (ret == 0) {
@@ -267,6 +296,8 @@ int wc_AesCmacGenerate(byte* out, word32* outSz,
     if (cmac) {
         XFREE(cmac, NULL, DYNAMIC_TYPE_CMAC);
     }
+#elif defined(WOLFSSL_CHECK_MEM_ZERO)
+    wc_MemZero_Check(cmac, sizeof(Cmac));
 #endif
 
     return ret;

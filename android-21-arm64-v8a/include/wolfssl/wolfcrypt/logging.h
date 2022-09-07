@@ -1,6 +1,6 @@
 /* logging.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -162,7 +162,12 @@ WOLFSSL_API void wolfSSL_Debugging_OFF(void);
     #define WOLFSSL_STUB(m) \
         WOLFSSL_MSG(WOLFSSL_LOG_CAT(wolfSSL Stub, m, not implemented))
     WOLFSSL_API int WOLFSSL_IS_DEBUG_ON(void);
-
+#if !defined(_WIN32) && defined(XVSNPRINTF)
+    WOLFSSL_API void WOLFSSL_MSG_EX(const char* fmt, ...);
+    #define HAVE_WOLFSSL_MSG_EX
+#else
+    #define WOLFSSL_MSG_EX(m, ...)
+#endif
     WOLFSSL_API void WOLFSSL_MSG(const char* msg);
     WOLFSSL_API void WOLFSSL_BUFFER(const byte* buffer, word32 length);
 
@@ -173,8 +178,9 @@ WOLFSSL_API void wolfSSL_Debugging_OFF(void);
     #define WOLFSSL_STUB(m)
     #define WOLFSSL_IS_DEBUG_ON() 0
 
-    #define WOLFSSL_MSG(m)
-    #define WOLFSSL_BUFFER(b, l)
+    #define WOLFSSL_MSG_EX(m, ...)    do{} while(0)
+    #define WOLFSSL_MSG(m)            do{} while(0)
+    #define WOLFSSL_BUFFER(b, l)      do{} while(0)
 
 #endif /* DEBUG_WOLFSSL && !WOLFSSL_DEBUG_ERRORS_ONLY */
 
@@ -188,13 +194,20 @@ WOLFSSL_API void wolfSSL_Debugging_OFF(void);
             WOLFSSL_ERROR_LINE((x), __func__, __LINE__, __FILE__, NULL)
     #else
         WOLFSSL_API void WOLFSSL_ERROR(int err);
-    #endif
-    WOLFSSL_API void WOLFSSL_ERROR_MSG(const char* msg);
+    #endif /* WOLFSSL_HAVE_ERROR_QUEUE */
 
+    WOLFSSL_API void WOLFSSL_ERROR_MSG(const char* msg);
 #else
     #define WOLFSSL_ERROR(e)
     #define WOLFSSL_ERROR_MSG(m)
-#endif
+#endif /* DEBUG_WOLFSSL | OPENSSL_ALL || WOLFSSL_NGINX || WOLFSSL_HAPROXY ||
+          OPENSSL_EXTRA */
+
+#ifdef WOLFSSL_VERBOSE_ERRORS
+#define WOLFSSL_ERROR_VERBOSE(e) WOLFSSL_ERROR(e)
+#else
+#define WOLFSSL_ERROR_VERBOSE(e) (void)(e)
+#endif /* WOLFSSL_VERBOSE_ERRORS */
 
 #ifdef HAVE_STACK_SIZE_VERBOSE
     extern WOLFSSL_API THREAD_LS_T unsigned char *StackSizeCheck_myStack;

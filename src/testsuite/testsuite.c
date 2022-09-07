@@ -1,6 +1,6 @@
 /* testsuite.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -97,11 +97,16 @@ static void *echoclient_test_wrapper(void* args) {
 
 int testsuite_test(int argc, char** argv)
 {
-#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT)
+#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT) && \
+    (!defined(WOLF_CRYPTO_CB_ONLY_RSA) && !defined(WOLF_CRYPTO_CB_ONLY_ECC))
     func_args server_args;
 
     tcp_ready ready;
+#if !defined(NETOS)
     THREAD_TYPE serverThread;
+
+    int ret;
+#endif
 
 #ifndef USE_WINDOWS_API
     const char *tempDir = NULL;
@@ -116,7 +121,6 @@ int testsuite_test(int argc, char** argv)
 #ifdef HAVE_STACK_SIZE
     void *serverThreadStackContext = NULL;
 #endif
-    int ret;
 
 #ifndef USE_WINDOWS_API
 #ifdef XGETENV
@@ -242,7 +246,8 @@ int testsuite_test(int argc, char** argv)
     return EXIT_SUCCESS;
 }
 
-#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT)
+#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT) && \
+   (!defined(WOLF_CRYPTO_CB_ONLY_RSA) && !defined(WOLF_CRYPTO_CB_ONLY_ECC))
 /* Perform a basic TLS handshake.
  *
  * First connection to echo a file.
@@ -310,7 +315,7 @@ static int test_tls(func_args* server_args)
 }
 
 /* Show cipher suites available. */
-static void show_ciphers()
+static void show_ciphers(void)
 {
     char ciphers[WOLFSSL_CIPHER_LIST_MAX_SIZE];
     XMEMSET(ciphers, 0, sizeof(ciphers));
@@ -319,7 +324,7 @@ static void show_ciphers()
 }
 
 /* Cleanup temporary output file. */
-static void cleanup_output()
+static void cleanup_output(void)
 {
     remove(outputName);
 }
@@ -329,7 +334,7 @@ static void cleanup_output()
  * @return  0 on success.
  * @return  1 on failure.
  */
-static int validate_cleanup_output()
+static int validate_cleanup_output(void)
 {
 #ifndef NO_SHA256
     byte input[WC_SHA256_DIGEST_SIZE];
@@ -397,7 +402,7 @@ static void simple_test(func_args* args)
 #ifndef USE_WINDOWS_API
     cliArgs.argc = NUMARGS;
     XSTRLCPY(argvc[1], "-p", sizeof(argvc[1]));
-    snprintf(argvc[2], sizeof(argvc[2]), "%d", (int)svrArgs.signal->port);
+    (void)snprintf(argvc[2], sizeof(argvc[2]), "%d", (int)svrArgs.signal->port);
 #else
     cliArgs.argc = 1;
 #endif
@@ -427,13 +432,14 @@ static void simple_test(func_args* args)
 void wait_tcp_ready(func_args* args)
 {
 #if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_mutex_lock(&args->signal->mutex);
+    PTHREAD_CHECK_RET(pthread_mutex_lock(&args->signal->mutex));
 
     if (!args->signal->ready)
-        pthread_cond_wait(&args->signal->cond, &args->signal->mutex);
+        PTHREAD_CHECK_RET(pthread_cond_wait(&args->signal->cond,
+                                            &args->signal->mutex));
     args->signal->ready = 0; /* reset */
 
-    pthread_mutex_unlock(&args->signal->mutex);
+    PTHREAD_CHECK_RET(pthread_mutex_unlock(&args->signal->mutex));
 #elif defined(NETOS)
     (void)tx_mutex_get(&args->signal->mutex, TX_WAIT_FOREVER);
 
@@ -459,7 +465,7 @@ void wait_tcp_ready(func_args* args)
 void start_thread(THREAD_FUNC fun, func_args* args, THREAD_TYPE* thread)
 {
 #if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_create(thread, 0, fun, args);
+    PTHREAD_CHECK_RET(pthread_create(thread, 0, fun, args));
     return;
 #elif defined(WOLFSSL_TIRTOS)
     /* Initialize the defaults and set the parameters. */
@@ -528,7 +534,7 @@ void start_thread(THREAD_FUNC fun, func_args* args, THREAD_TYPE* thread)
 void join_thread(THREAD_TYPE thread)
 {
 #if defined(_POSIX_THREADS) && !defined(__MINGW32__)
-    pthread_join(thread, 0);
+    PTHREAD_CHECK_RET(pthread_join(thread, 0));
 #elif defined(WOLFSSL_TIRTOS)
     while(1) {
         if (Task_getMode(thread) == Task_Mode_TERMINATED) {
@@ -625,8 +631,7 @@ int main(int argc, char** argv)
 
     wolfSSL_Cleanup();
     printf("\nAll tests passed!\n");
-
-    EXIT_TEST(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 
 

@@ -1,6 +1,6 @@
 /* sha3.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -621,7 +621,7 @@ static int Sha3Update(wc_Sha3* sha3, const byte* data, word32 len, byte p)
             t[i] = data[i];
         data += i;
         len -= i;
-        sha3->i += i;
+        sha3->i += (byte) i;
 
         if (sha3->i == p * 8) {
             for (i = 0; i < p; i++)
@@ -639,7 +639,7 @@ static int Sha3Update(wc_Sha3* sha3, const byte* data, word32 len, byte p)
     }
     for (i = 0; i < len; i++)
         sha3->t[i] = data[i];
-    sha3->i += i;
+    sha3->i += (byte) i;
 
     return 0;
 }
@@ -828,7 +828,7 @@ static int wc_Sha3Copy(wc_Sha3* src, wc_Sha3* dst)
 
     XMEMCPY(dst, src, sizeof(wc_Sha3));
 
-#ifdef WOLFSSL_ASYNC_CRYPT
+#if defined(WOLFSSL_ASYNC_CRYPT) && defined(WC_ASYNC_ENABLE_SHA3)
     ret = wolfAsync_DevCopy(&src->asyncDev, &dst->asyncDev);
 #endif
 #ifdef WOLFSSL_HASH_FLAGS

@@ -1,6 +1,6 @@
 /* des3.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -79,6 +79,9 @@ enum {
 
 
 #if defined(STM32_CRYPTO)
+
+#include <wolfssl/wolfcrypt/port/st/stm32.h>
+
 enum {
     DES_CBC = 0,
     DES_ECB = 1

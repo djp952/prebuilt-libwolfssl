@@ -1,6 +1,6 @@
 /* key_data.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -22,6 +22,7 @@
 
 
 
+
 #ifndef KEY_DATA_H_
 #define KEY_DATA_H_
 
@@ -38,6 +39,8 @@ typedef struct st_key_block_data
     uint8_t iv[R_TSIP_AES_CBC_IV_BYTE_SIZE];
     uint8_t encrypted_user_rsa2048_ne_key[R_TSIP_RSA2048_NE_KEY_BYTE_SIZE + 16];
     uint8_t encrypted_user_update_key[R_TSIP_AES256_KEY_BYTE_SIZE + 16];
+    uint8_t encrypted_user_rsa2048_private_key[R_TSIP_RSA2048_ND_KEY_BYTE_SIZE + 16];
+    uint8_t encrypted_user_ecc256_private_key[R_TSIP_ECC_PRIVATE_KEY_BYTE_SIZE + 16];
 } st_key_block_data_t;
 
 

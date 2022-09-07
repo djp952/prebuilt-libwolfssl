@@ -1,6 +1,6 @@
 /* aes.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -106,7 +106,7 @@ block cipher mechanism that uses n-bit binary string parameter key with 128-bits
 
 #if defined(WOLFSSL_RENESAS_TSIP_TLS) && \
     defined(WOLFSSL_RENESAS_TSIP_TLS_AES_CRYPT)
-    #include <wolfssl/wolfcrypt/port/Renesas/renesas-tsip-crypt.h>
+    #include <wolfssl/wolfcrypt/port/Renesas/renesas_tsip_types.h>
 #endif
 
 #ifdef __cplusplus
@@ -159,7 +159,7 @@ enum {
     AES_XTS_MODE = 3,
 #endif
 
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
     AES_MAX_ID_LEN      = 32,
     AES_MAX_LABEL_LEN   = 32,
 #endif
@@ -191,7 +191,6 @@ struct Aes {
     int ctxInitDone;
     int keyId;
 #endif
-
 #ifdef GCM_TABLE
     /* key-based fast multiplication table. */
     ALIGN16 byte M0[256][AES_BLOCK_SIZE];
@@ -206,6 +205,9 @@ struct Aes {
     word32 y0;
 #endif
 #endif /* HAVE_AESGCM */
+#ifdef WOLFSSL_CAAM
+    int blackKey; /* black key / hsm key id */
+#endif
 #ifdef WOLFSSL_AESNI
     byte use_aesni;
 #endif /* WOLFSSL_AESNI */
@@ -213,7 +215,7 @@ struct Aes {
     int    devId;
     void*  devCtx;
 #endif
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
     byte id[AES_MAX_ID_LEN];
     int  idLen;
     char label[AES_MAX_LABEL_LEN];
@@ -537,7 +539,7 @@ WOLFSSL_API int wc_AesXtsFree(XtsAes* aes);
 WOLFSSL_API int wc_AesGetKeySize(Aes* aes, word32* keySize);
 
 WOLFSSL_API int  wc_AesInit(Aes* aes, void* heap, int devId);
-#ifdef HAVE_PKCS11
+#ifdef WOLF_PRIVATE_KEY_ID
 WOLFSSL_API int  wc_AesInit_Id(Aes* aes, unsigned char* id, int len, void* heap,
         int devId);
 WOLFSSL_API int  wc_AesInit_Label(Aes* aes, const char* label, void* heap,

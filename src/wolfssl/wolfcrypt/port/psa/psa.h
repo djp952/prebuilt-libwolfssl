@@ -1,6 +1,6 @@
 /* psa.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -65,6 +65,13 @@
 
 #if !defined(WOLFSSL_PSA_NO_PKCB)
 #include <wolfssl/ssl.h>
+#endif
+
+#ifndef PSA_ALG_NONE
+    #define PSA_ALG_NONE ((psa_algorithm_t)0)
+#endif
+#ifndef PSA_KEY_ID_NULL
+    #define PSA_KEY_ID_NULL ((psa_key_id_t)0)
 #endif
 
 #if defined(WOLFSSL_PSA_GLOBAL_LOCK)

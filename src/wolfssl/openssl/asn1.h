@@ -1,6 +1,6 @@
 /* asn1.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -69,6 +69,7 @@
 #define ASN1_UTCTIME_print              wolfSSL_ASN1_UTCTIME_print
 #define ASN1_TIME_check                 wolfSSL_ASN1_TIME_check
 #define ASN1_TIME_diff                  wolfSSL_ASN1_TIME_diff
+#define ASN1_TIME_compare               wolfSSL_ASN1_TIME_compare
 #define ASN1_TIME_set                   wolfSSL_ASN1_TIME_set
 
 #define V_ASN1_EOC                      0
@@ -142,11 +143,10 @@ typedef enum {
 } WOLFSSL_ASN1_TYPES;
 
 #define ASN1_SEQUENCE(type) \
-    static type __##type##_dummy_struct;\
     static const WOLFSSL_ASN1_TEMPLATE type##_member_data[]
 
 #define ASN1_SIMPLE(type, member, member_type) \
-    { (char*)&__##type##_dummy_struct.member - (char*)&__##type##_dummy_struct, \
+    { OFFSETOF(type, member), \
         WOLFSSL_##member_type##_ASN1 }
 
 #define ASN1_SEQUENCE_END(type) \
@@ -164,7 +164,7 @@ WOLFSSL_API int wolfSSL_ASN1_item_i2d(const void *src, byte **dest,
                                       const WOLFSSL_ASN1_ITEM *tpl);
 
 /* Need function declaration otherwise compiler complains */
-// NOLINTBEGIN(readability-named-parameter)
+/* // NOLINTBEGIN(readability-named-parameter) */
 #define IMPLEMENT_ASN1_FUNCTIONS(type) \
     type *type##_new(void); \
     type *type##_new(void){ \
@@ -179,7 +179,7 @@ WOLFSSL_API int wolfSSL_ASN1_item_i2d(const void *src, byte **dest,
     { \
         return wolfSSL_ASN1_item_i2d(src, dest, &type##_template_data);\
     }
-// NOLINTEND(readability-named-parameter)
+/* // NOLINTEND(readability-named-parameter) */
 
 #endif /* OPENSSL_ALL */
 

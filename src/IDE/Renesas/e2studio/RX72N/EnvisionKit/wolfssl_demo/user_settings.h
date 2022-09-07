@@ -1,6 +1,6 @@
 /* user_settings.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -36,9 +36,10 @@
  *      109: TSIPv1.09
  *      113: TSIPv1.13
  *      114: TSIPv1.14
+ *      115: TSIPv1.15
  *----------------------------------------------------------------------------*/
   #define WOLFSSL_RENESAS_TSIP
-  #define WOLFSSL_RENESAS_TSIP_VER     114
+  #define WOLFSSL_RENESAS_TSIP_VER     115
 
 
 /*-- TLS version definitions  --------------------------------------------------
@@ -47,7 +48,7 @@
  * TLSv1.3, uncomment line below.
  * 
  *----------------------------------------------------------------------------*/
-/*#define WOLFSSL_TLS13*/
+#define WOLFSSL_TLS13
 
 
 /*-- Operating System related definitions --------------------------------------
@@ -60,8 +61,10 @@
 #define FREERTOS
 #define FREERTOS_TCP
 
-
-
+#if !defined(FREERTOS_TCP)
+    #define WOLFSSL_NO_SOCK
+    #define WOLFSSL_USER_IO
+#endif
 
 /*-- Cipher related definitions  -----------------------------------------------
  *
@@ -69,11 +72,12 @@
  *----------------------------------------------------------------------------*/
 
   #define NO_DEV_RANDOM
-
+  #define NO_MD4
   #define WOLFSSL_DH_CONST
   #define HAVE_TLS_EXTENSIONS
 
   #define HAVE_AESGCM
+  #define HAVE_AESCCM
   #define HAVE_AES_CBC
   #define WOLFSSL_SHA512
 
@@ -148,8 +152,10 @@
   
 
   #define WOLFSSL_USER_CURRTIME /* for benchmark */
-  #define USER_TIME
+  #define TIME_OVERRIDES
   #define XTIME    time
+  #define WOLFSSL_GMTIME
+  #define XGMTIME(c,t)  gmtime(c)
   #define USE_WOLF_SUSECONDS_T
   #define USE_WOLF_TIMEVAL_T
 
@@ -219,3 +225,6 @@
     #define HAVE_HKDF
     #define WC_RSA_PSS
 #endif
+
+/*-- strcasecmp */
+#define XSTRCASECMP(s1,s2) strcmp((s1),(s2))

@@ -1,6 +1,6 @@
 /* crypto.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -66,6 +66,25 @@ WOLFSSL_API unsigned char *wolfSSL_OPENSSL_hexstr2buf(const char *str, long *len
 
 WOLFSSL_API int wolfSSL_OPENSSL_init_crypto(word64 opts, const OPENSSL_INIT_SETTINGS *settings);
 #endif
+
+/* class index for wolfSSL_CRYPTO_get_ex_new_index */
+#define CRYPTO_EX_INDEX_SSL             WOLF_CRYPTO_EX_INDEX_SSL
+#define CRYPTO_EX_INDEX_SSL_CTX         WOLF_CRYPTO_EX_INDEX_SSL_CTX
+#define CRYPTO_EX_INDEX_SSL_SESSION     WOLF_CRYPTO_EX_INDEX_SSL_SESSION
+#define CRYPTO_EX_INDEX_X509            WOLF_CRYPTO_EX_INDEX_X509
+#define CRYPTO_EX_INDEX_X509_STORE      WOLF_CRYPTO_EX_INDEX_X509_STORE
+#define CRYPTO_EX_INDEX_X509_STORE_CTX  WOLF_CRYPTO_EX_INDEX_X509_STORE_CTX
+#define CRYPTO_EX_INDEX_DH              WOLF_CRYPTO_EX_INDEX_DH
+#define CRYPTO_EX_INDEX_DSA             WOLF_CRYPTO_EX_INDEX_DSA
+#define CRYPTO_EX_INDEX_EC_KEY          WOLF_CRYPTO_EX_INDEX_EC_KEY
+#define CRYPTO_EX_INDEX_RSA             WOLF_CRYPTO_EX_INDEX_RSA
+#define CRYPTO_EX_INDEX_ENGINE          WOLF_CRYPTO_EX_INDEX_ENGINE
+#define CRYPTO_EX_INDEX_UI              WOLF_CRYPTO_EX_INDEX_UI
+#define CRYPTO_EX_INDEX_BIO             WOLF_CRYPTO_EX_INDEX_BIO
+#define CRYPTO_EX_INDEX_APP             WOLF_CRYPTO_EX_INDEX_APP
+#define CRYPTO_EX_INDEX_UI_METHOD       WOLF_CRYPTO_EX_INDEX_UI_METHOD
+#define CRYPTO_EX_INDEX_DRBG            WOLF_CRYPTO_EX_INDEX_DRBG
+#define CRYPTO_EX_INDEX__COUNT          WOLF_CRYPTO_EX_INDEX__COUNT
 
 #define crypto_threadid_st          WOLFSSL_CRYPTO_THREADID
 #define CRYPTO_THREADID             WOLFSSL_CRYPTO_THREADID

@@ -1,6 +1,6 @@
 /* user_settings_fipsv2.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -105,7 +105,8 @@ extern "C" {
 #define NO_PWDBASED
 #define NO_RC4
 #define WOLFSSL_NO_SHAKE256
-
+#define NO_RABBIT
+#define NO_HC128
 
 #ifdef __cplusplus
 }

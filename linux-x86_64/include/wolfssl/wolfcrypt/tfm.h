@@ -1,6 +1,6 @@
 /* tfm.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -843,7 +843,7 @@ MP_API int  mp_prime_is_prime_ex(mp_int* a, int t, int* result, WC_RNG* rng);
 #ifdef WOLFSSL_KEY_GEN
 MP_API int  mp_gcd(fp_int *a, fp_int *b, fp_int *c);
 MP_API int  mp_lcm(fp_int *a, fp_int *b, fp_int *c);
-MP_API int  mp_rand_prime(mp_int* N, int len, WC_RNG* rng, void* heap);
+MP_API int  mp_rand_prime(mp_int* a, int len, WC_RNG* rng, void* heap);
 MP_API int  mp_exch(mp_int *a, mp_int *b);
 #endif /* WOLFSSL_KEY_GEN */
 MP_API int  mp_cond_swap_ct (mp_int * a, mp_int * b, int c, int m);
@@ -855,6 +855,11 @@ MP_API int  mp_lshd (mp_int * a, int b);
 MP_API int  mp_abs(mp_int* a, mp_int* b);
 
 WOLFSSL_API word32 CheckRunTimeFastMath(void);
+
+#ifdef WOLFSSL_CHECK_MEM_ZERO
+void mp_memzero_add(const char* name, mp_int* a);
+void mp_memzero_check(mp_int* a);
+#endif
 
 /* If user uses RSA, DH, DSA, or ECC math lib directly then fast math FP_SIZE
    must match, return 1 if a match otherwise 0 */

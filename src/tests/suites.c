@@ -1,6 +1,6 @@
 /* suites.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -494,7 +494,8 @@ static int execute_test_case(int svr_argc, char** svr_argv,
         if (cliArgs.argc + 2 > MAX_ARGS)
             printf("cannot add the magic port number flag to client\n");
         else {
-            snprintf(portNumber, sizeof(portNumber), "%d", (int)ready.port);
+            (void)snprintf(portNumber, sizeof(portNumber), "%d",
+                           (int)ready.port);
             cli_argv[cliArgs.argc++] = portFlag;
             cli_argv[cliArgs.argc++] = portNumber;
         }
@@ -633,15 +634,20 @@ static void test_harness(void* vargs)
         args->return_code = 1;
         return;
     }
-    fseek(file, 0, SEEK_END);
+    if (fseek(file, 0, SEEK_END) < 0) {
+        fprintf(stderr, "error %d fseeking %s\n", errno, fname);
+        fclose(file);
+        args->return_code = 1;
+        return;
+    }
     sz = ftell(file);
-    rewind(file);
     if (sz <= 0) {
         fprintf(stderr, "%s is empty\n", fname);
         fclose(file);
         args->return_code = 1;
         return;
     }
+    rewind(file);
 
     script = (char*)malloc(sz+1);
     if (script == 0) {
@@ -778,7 +784,8 @@ static void test_harness(void* vargs)
 
 int SuiteTest(int argc, char** argv)
 {
-#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT)
+#if !defined(NO_WOLFSSL_SERVER) && !defined(NO_WOLFSSL_CLIENT) && \
+    !defined(WOLF_CRYPTO_CB_ONLY_RSA) && !defined(WOLF_CRYPTO_CB_ONLY_ECC)
     func_args args;
     char argv0[3][80];
     char* myArgv[3];
@@ -909,6 +916,20 @@ int SuiteTest(int argc, char** argv)
     }
     #endif
 #endif
+#if defined(WC_RSA_PSS) && (!defined(HAVE_FIPS) || \
+     (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION > 2))) && \
+     (!defined(HAVE_SELFTEST) || (defined(HAVE_SELFTEST_VERSION) && \
+                      (HAVE_SELFTEST_VERSION > 2)))
+    /* add RSA-PSS certificate cipher suite tests */
+    XSTRLCPY(argv0[1], "tests/test-rsapss.conf", sizeof(argv0[1]));
+    printf("starting RSA-PSS extra cipher suite tests\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+#endif
 #if defined(HAVE_CURVE25519) && defined(HAVE_ED25519) && \
     defined(HAVE_ED25519_SIGN) && defined(HAVE_ED25519_VERIFY) && \
     defined(HAVE_ED25519_KEY_IMPORT) && defined(HAVE_ED25519_KEY_EXPORT)
@@ -1022,6 +1043,17 @@ int SuiteTest(int argc, char** argv)
         goto exit;
     }
 #endif
+
+    /* Add dtls downgrade test */
+    XSTRLCPY(argv0[1], "tests/test-dtls-downgrade.conf", sizeof(argv0[1]));
+    printf("starting dtls downgrade tests\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+
 #ifdef WOLFSSL_OLDTLS_SHA2_CIPHERSUITES
     /* add dtls extra suites */
     XSTRLCPY(argv0[1], "tests/test-dtls-sha2.conf", sizeof(argv0[1]));
@@ -1086,6 +1118,53 @@ int SuiteTest(int argc, char** argv)
     }
     strcpy(argv0[2], "");
 #endif
+
+#ifdef WOLFSSL_DTLS13
+    args.argc = 2;
+    strcpy(argv0[1], "tests/test-dtls13.conf");
+    printf("starting DTLSv1.3 suite\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+
+#ifndef WOLFSSL_NO_TLS12
+    args.argc = 2;
+    strcpy(argv0[1], "tests/test-dtls13-downgrade.conf");
+    printf("starting DTLSv1.3 suite - downgrade\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+#endif /* WOLFSSL_NO_TLS12 */
+
+#ifndef NO_PSK
+    XSTRLCPY(argv0[1], "tests/test-dtls13-psk.conf", sizeof(argv0[1]));
+    printf("starting DTLS 1.3 psk suite tests\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+#endif /* NO_PSK */
+
+#ifdef WOLFSSL_DTLS_CID
+    XSTRLCPY(argv0[1], "tests/test-dtls13-cid.conf", sizeof(argv0[1]));
+    printf("starting DTLS 1.3 ConnectionID suite tests\n");
+    test_harness(&args);
+    if (args.return_code != 0) {
+        printf("error from script %d\n", args.return_code);
+        args.return_code = EXIT_FAILURE;
+        goto exit;
+    }
+#endif /* WOLFSSL_DTLS_CID */
+
+#endif /* WOLFSSL_DTLS13 */
 
 #endif
 #ifdef WOLFSSL_SCTP

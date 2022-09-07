@@ -1,6 +1,6 @@
 /* settings.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -350,9 +350,6 @@
 
 #ifdef CYASSL_GAME_BUILD
     #define SIZEOF_LONG_LONG 8
-    #if defined(__PPU) || defined(__XENON)
-        #define BIG_ENDIAN_ORDER
-    #endif
 #endif
 
 #ifdef CYASSL_LSR

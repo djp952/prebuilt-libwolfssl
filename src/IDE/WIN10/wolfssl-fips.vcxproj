@@ -115,7 +115,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <OutDir>$(SolutionDir)$(Configuration)\$(Platform)\</OutDir>
-    <IntDir>$(Configuration)\$(Platform)\obj\</IntDir>
+    <IntDir>$(Configuration)\$(Platform)\$(ProjectName)_obj\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -278,6 +278,8 @@
     <ClCompile Include="..\..\src\ssl.c" />
     <ClCompile Include="..\..\src\tls.c" />
     <ClCompile Include="..\..\src\tls13.c" />
+    <ClCompile Include="..\..\src\dtls13.c" />
+    <ClCompile Include="..\..\src\dtls.c" />
     <ClCompile Include="..\..\wolfcrypt\src\wc_encrypt.c" />
     <ClCompile Include="..\..\wolfcrypt\src\wolfcrypt_first.c" />
     <ClCompile Include="..\..\wolfcrypt\src\wolfcrypt_last.c" />
@@ -302,7 +304,11 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="user_settings.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="wolfssl-fips.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

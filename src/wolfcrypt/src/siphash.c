@@ -1,6 +1,6 @@
 /* siphash.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -85,7 +85,7 @@
  */
 #define GET_U16(a)      (*(word16*)(a))
 /**
- * Encode 64-bit nuumber to a little-endian byte array.
+ * Encode 64-bit number to a little-endian byte array.
  *
  * @param [out] a  Byte array to write into.
  * @param [in]  n  Number to encode.
@@ -125,7 +125,7 @@
 #define GET_U16(a)      (((word16)((a)[1]) <<  8) |     \
                          ((word16)((a)[0])      ))
 /**
- * Encode 64-bit nuumber to a little-endian byte array.
+ * Encode 64-bit number to a little-endian byte array.
  *
  * @param [out] a  Byte array to write into.
  * @param [in]  n  Number to encode.
@@ -165,15 +165,15 @@ int wc_InitSipHash(SipHash* sipHash, const unsigned char* key,
         word64 k1 = GET_U64(key + 8);
 
         /* Initialize state with key. */
-        sipHash->v[0] = 0x736f6d6570736575UL;
+        sipHash->v[0] = 0x736f6d6570736575ULL;
         if (outSz == SIPHASH_MAC_SIZE_8) {
-            sipHash->v[1] = 0x646f72616e646f6dUL;
+            sipHash->v[1] = 0x646f72616e646f6dULL;
         }
         else {
-            sipHash->v[1] = 0x646f72616e646f83UL;
+            sipHash->v[1] = 0x646f72616e646f83ULL;
         }
-        sipHash->v[2] = 0x6c7967656e657261UL;
-        sipHash->v[3] = 0x7465646279746573UL;
+        sipHash->v[2] = 0x6c7967656e657261ULL;
+        sipHash->v[3] = 0x7465646279746573ULL;
 
         sipHash->v[0] ^= k0;
         sipHash->v[1] ^= k1;
@@ -352,7 +352,7 @@ int wc_SipHashFinal(SipHash* sipHash, unsigned char* out, unsigned char outSz)
     return ret;
 }
 
-#if defined(__GNUC__) && defined(__x86_64__) && \
+#if !defined(WOLFSSL_NO_ASM) && defined(__GNUC__) && defined(__x86_64__) && \
     (WOLFSSL_SIPHASH_CROUNDS == 1 || WOLFSSL_SIPHASH_CROUNDS == 2) && \
     (WOLFSSL_SIPHASH_DROUNDS == 2 || WOLFSSL_SIPHASH_DROUNDS == 4)
 
@@ -453,21 +453,21 @@ int wc_SipHash(const unsigned char* key, const unsigned char* in, word32 inSz,
 
         "cmp    $7, %[inSz]\n\t"
         "jl     L_siphash_n7\n\t"
-        "movzxb 6(%[in]), %%r12\n\t"
+        "movzbq 6(%[in]), %%r12\n\t"
         "shlq   $48, %%r12\n\t"
         "orq    %%r12, %%r13\n\t"
         "L_siphash_n7:\n\t"
 
         "cmp    $6, %[inSz]\n\t"
         "jl     L_siphash_n6\n\t"
-        "movzxb 5(%[in]), %%r12\n\t"
+        "movzbq 5(%[in]), %%r12\n\t"
         "shlq   $40, %%r12\n\t"
         "orq    %%r12, %%r13\n\t"
         "L_siphash_n6:\n\t"
 
         "cmp    $5, %[inSz]\n\t"
         "jl     L_siphash_n5\n\t"
-        "movzxb 4(%[in]), %%r12\n\t"
+        "movzbq 4(%[in]), %%r12\n\t"
         "shlq   $32, %%r12\n\t"
         "orq    %%r12, %%r13\n\t"
         "L_siphash_n5:\n\t"
@@ -483,7 +483,7 @@ int wc_SipHash(const unsigned char* key, const unsigned char* in, word32 inSz,
 
         "cmp    $3, %[inSz]\n\t"
         "jl     L_siphash_n3\n\t"
-        "movzxb 2(%[in]), %%r12\n\t"
+        "movzbq 2(%[in]), %%r12\n\t"
         "shlq   $16, %%r12\n\t"
         "orq    %%r12, %%r13\n\t"
         "L_siphash_n3:\n\t"
@@ -566,7 +566,7 @@ int wc_SipHash(const unsigned char* key, const unsigned char* in, word32 inSz,
     return 0;
 }
 
-#elif defined(__GNUC__) && defined(__aarch64__) && \
+#elif !defined(WOLFSSL_NO_ASM) && defined(__GNUC__) && defined(__aarch64__) && \
     (WOLFSSL_SIPHASH_CROUNDS == 1 || WOLFSSL_SIPHASH_CROUNDS == 2) && \
     (WOLFSSL_SIPHASH_DROUNDS == 2 || WOLFSSL_SIPHASH_DROUNDS == 4)
 
@@ -860,10 +860,10 @@ int wc_SipHash(const unsigned char* key, const unsigned char* in, word32 inSz,
         word64 b = (word64)((word64)inSz << 56);
 
         /* Initialize state with key. */
-        v0 = 0x736f6d6570736575UL;
-        v1 = 0x646f72616e646f6dUL;
-        v2 = 0x6c7967656e657261UL;
-        v3 = 0x7465646279746573UL;
+        v0 = 0x736f6d6570736575ULL;
+        v1 = 0x646f72616e646f6dULL;
+        v2 = 0x6c7967656e657261ULL;
+        v3 = 0x7465646279746573ULL;
 
         if (outSz == SIPHASH_MAC_SIZE_16) {
             v1 ^= 0xee;
@@ -886,19 +886,19 @@ int wc_SipHash(const unsigned char* key, const unsigned char* in, word32 inSz,
         switch (inSz) {
             case 7:
                 b |= (word64)in[6] << 48;
-                /* fall-through */
+                FALL_THROUGH;
             case 6:
                 b |= (word64)in[5] << 40;
-                /* fall-through */
+                FALL_THROUGH;
             case 5:
                 b |= (word64)in[4] << 32;
-                /* fall-through */
+                FALL_THROUGH;
             case 4:
                 b |= (word64)GET_U32(in);
                 break;
             case 3:
                 b |= (word64)in[2] << 16;
-                /* fall-through */
+                FALL_THROUGH;
             case 2:
                 b |= (word64)GET_U16(in);
                 break;
