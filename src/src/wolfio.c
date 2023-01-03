@@ -374,8 +374,9 @@ static int sockAddrEqual(
 
 static int isDGramSock(int sfd)
 {
-    int type = 0;
-    XSOCKLENT length = sizeof(int); /* optvalue 'type' is of size int */
+    char type = 0;
+    /* optvalue 'type' is of size int */
+    XSOCKLENT length = (XSOCKLENT)sizeof(char);
 
     if (getsockopt(sfd, SOL_SOCKET, SO_TYPE, &type, &length) == 0 &&
             type != SOCK_DGRAM) {
@@ -398,7 +399,7 @@ int EmbedReceiveFrom(WOLFSSL *ssl, char *buf, int sz, void *ctx)
     byte doDtlsTimeout;
     SOCKADDR_S lclPeer;
     SOCKADDR_S* peer;
-    XSOCKLENT peerSz;
+    XSOCKLENT peerSz = 0;
 
     WOLFSSL_ENTER("EmbedReceiveFrom()");
 
@@ -494,13 +495,13 @@ int EmbedReceiveFrom(WOLFSSL *ssl, char *buf, int sz, void *ctx)
     }
     else if (dtlsCtx->userSet) {
         /* Truncate peer size */
-        if (peerSz > sizeof(lclPeer))
-            peerSz = sizeof(lclPeer);
+        if (peerSz > (XSOCKLENT)sizeof(lclPeer))
+            peerSz = (XSOCKLENT)sizeof(lclPeer);
     }
     else {
         /* Truncate peer size */
-        if (peerSz > dtlsCtx->peer.bufSz)
-            peerSz = dtlsCtx->peer.bufSz;
+        if (peerSz > (XSOCKLENT)dtlsCtx->peer.bufSz)
+            peerSz = (XSOCKLENT)dtlsCtx->peer.bufSz;
     }
 
     recvd = TranslateReturnCode(recvd, sd);
@@ -836,7 +837,7 @@ int wolfIO_Recv(SOCKET_T sd, char *buf, int sz, int rdFlags)
     int recvd;
 
     recvd = (int)RECV_FUNCTION(sd, buf, sz, rdFlags);
-    recvd = TranslateReturnCode(recvd, sd);
+    recvd = TranslateReturnCode(recvd, (int)sd);
 
     return recvd;
 }
@@ -846,7 +847,7 @@ int wolfIO_Send(SOCKET_T sd, char *buf, int sz, int wrFlags)
     int sent;
 
     sent = (int)SEND_FUNCTION(sd, buf, sz, wrFlags);
-    sent = TranslateReturnCode(sent, sd);
+    sent = TranslateReturnCode(sent, (int)sd);
 
     return sent;
 }
@@ -906,12 +907,12 @@ int wolfIO_Send(SOCKET_T sd, char *buf, int sz, int wrFlags)
 
     #ifndef USE_WINDOWS_API
         nfds = (int)sockfd + 1;
-    #endif
 
         if ((sockfd < 0) || (sockfd >= FD_SETSIZE)) {
             WOLFSSL_MSG("socket fd out of FDSET range");
             return -1;
         }
+    #endif
 
         FD_ZERO(&rfds);
         FD_SET(sockfd, &rfds);
@@ -1141,6 +1142,7 @@ int wolfIO_TcpConnect(SOCKET_T* sockfd, const char* ip, word16 port, int to_sec)
 #endif
     {
         WOLFSSL_MSG("bad socket fd, out of fds?");
+        *sockfd = SOCKET_INVALID;
         return -1;
     }
 
@@ -1155,8 +1157,13 @@ int wolfIO_TcpConnect(SOCKET_T* sockfd, const char* ip, word16 port, int to_sec)
 
     ret = connect(*sockfd, (SOCKADDR *)&addr, sockaddr_len);
 #ifdef HAVE_IO_TIMEOUT
-    if (ret != 0) {
-        if ((errno == EINPROGRESS) && (to_sec > 0)) {
+    if ((ret != 0) && (to_sec > 0)) {
+#ifdef USE_WINDOWS_API
+        if ((ret == SOCKET_ERROR) && (wolfSSL_LastError(ret) == WSAEWOULDBLOCK))
+#else
+        if (errno == EINPROGRESS)
+#endif
+        {
             /* wait for connect to complete */
             ret = wolfIO_Select(*sockfd, to_sec);
 
@@ -1200,7 +1207,12 @@ int wolfIO_TcpBind(SOCKET_T* sockfd, word16 port)
     sin->sin_port = XHTONS(port);
     *sockfd = (SOCKET_T)socket(AF_INET, SOCK_STREAM, 0);
 
-    if (*sockfd < 0) {
+#ifdef USE_WINDOWS_API
+    if (*sockfd == SOCKET_INVALID)
+#else
+    if (*sockfd <= SOCKET_INVALID)
+#endif
+    {
         WOLFSSL_MSG("socket failed");
         *sockfd = SOCKET_INVALID;
         return -1;
@@ -1788,7 +1800,7 @@ int EmbedOcspLookup(void* ctx, const char* url, int urlSz,
                 WOLFSSL_MSG("OCSP ocsp request failed");
             }
             else {
-                ret = wolfIO_HttpProcessResponseOcsp(sfd, ocspRespBuf, httpBuf,
+                ret = wolfIO_HttpProcessResponseOcsp((int)sfd, ocspRespBuf, httpBuf,
                                                  HTTP_SCRATCH_BUFFER_SIZE, ctx);
             }
             if (sfd != SOCKET_INVALID)

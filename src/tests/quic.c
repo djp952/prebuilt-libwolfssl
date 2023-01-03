@@ -949,20 +949,26 @@ static int QuicConversation_start(QuicConversation *conv, const byte *data,
     return ret;
 }
 
-static int QuicConversation_step(QuicConversation *conv)
+static int QuicConversation_step(QuicConversation *conv, int may_fail)
 {
     int n;
 
     if (!conv->started) {
-        AssertTrue(wolfSSL_connect(conv->client->ssl) != WOLFSSL_SUCCESS);
-        AssertIntEQ(SSL_ERROR_WANT_READ, wolfSSL_get_error(conv->client->ssl, 0));
+        n = wolfSSL_connect(conv->client->ssl);
+        if (n != WOLFSSL_SUCCESS
+            && wolfSSL_get_error(conv->client->ssl, 0) != SSL_ERROR_WANT_READ) {
+            if (may_fail) return 0;
+            AssertIntEQ(SSL_ERROR_WANT_READ, wolfSSL_get_error(conv->client->ssl, 0));
+        }
         conv->started = 1;
     }
     if (conv->server->output.len > 0) {
         QuicTestContext_forward(conv->server, conv->client, conv->rec_log, sizeof(conv->rec_log));
         n = wolfSSL_quic_read_write(conv->client->ssl);
-        if (n != WOLFSSL_SUCCESS) {
-            AssertIntEQ(wolfSSL_get_error(conv->client->ssl, 0), SSL_ERROR_WANT_READ);
+        if (n != WOLFSSL_SUCCESS
+            && wolfSSL_get_error(conv->client->ssl, 0) != SSL_ERROR_WANT_READ) {
+            if (may_fail) return 0;
+            AssertIntEQ(SSL_ERROR_WANT_READ, wolfSSL_get_error(conv->client->ssl, 0));
         }
         return 1;
     }
@@ -976,7 +982,10 @@ static int QuicConversation_step(QuicConversation *conv)
                                         (int)(sizeof(conv->early_data) - conv->early_data_len),
                                         &written);
             if (n < 0) {
-                AssertIntEQ(wolfSSL_get_error(conv->server->ssl, 0), SSL_ERROR_WANT_READ);
+                if (wolfSSL_get_error(conv->server->ssl, 0) != SSL_ERROR_WANT_READ) {
+                    if (may_fail) return 0;
+                    AssertIntEQ(wolfSSL_get_error(conv->server->ssl, 0), SSL_ERROR_WANT_READ);
+                }
             }
             else if (n > 0) {
                 conv->early_data_len += n;
@@ -988,7 +997,9 @@ static int QuicConversation_step(QuicConversation *conv)
  #endif /* WOLFSSL_EARLY_DATA */
         {
             n = wolfSSL_quic_read_write(conv->server->ssl);
-            if (n != WOLFSSL_SUCCESS) {
+            if (n != WOLFSSL_SUCCESS
+                && wolfSSL_get_error(conv->server->ssl, 0) != SSL_ERROR_WANT_READ) {
+                if (may_fail) return 0;
                 AssertIntEQ(wolfSSL_get_error(conv->server->ssl, 0), SSL_ERROR_WANT_READ);
             }
         }
@@ -1004,7 +1015,7 @@ static void QuicConversation_do(QuicConversation *conv)
     }
 
     while (1) {
-        if (!QuicConversation_step(conv)) {
+        if (!QuicConversation_step(conv, 0)) {
             int c_err = wolfSSL_get_error(conv->client->ssl, 0);
             int s_err = wolfSSL_get_error(conv->server->ssl, 0);
             if (c_err == 0 && s_err == 0) {
@@ -1017,6 +1028,26 @@ static void QuicConversation_do(QuicConversation *conv)
         }
     }
 }
+
+#ifdef HAVE_SESSION_TICKET
+
+static void QuicConversation_fail(QuicConversation *conv)
+{
+    if (!conv->started) {
+        QuicConversation_start(conv, NULL, 0, NULL);
+    }
+
+    while (1) {
+        if (!QuicConversation_step(conv, 1)) {
+            int c_err = wolfSSL_get_error(conv->client->ssl, 0);
+            int s_err = wolfSSL_get_error(conv->server->ssl, 0);
+            AssertTrue(c_err != 0 || s_err != 0);
+            break;
+        }
+    }
+}
+
+#endif /* HAVE_SESSION_TICKET */
 
 static int test_quic_client_hello(int verbose) {
     WOLFSSL_CTX *ctx;
@@ -1089,14 +1120,14 @@ static int test_quic_server_hello(int verbose) {
 
     /* connect */
     QuicConversation_init(&conv, &tclient, &tserver);
-    QuicConversation_step(&conv);
+    QuicConversation_step(&conv, 0);
     /* check established/missing secrets */
     check_secrets(&tserver, wolfssl_encryption_initial, 0, 0);
     check_secrets(&tserver, wolfssl_encryption_handshake, 32, 32);
     check_secrets(&tserver, wolfssl_encryption_application, 32, 32);
     check_secrets(&tclient, wolfssl_encryption_handshake, 0, 0);
     /* feed the server data to the client */
-    QuicConversation_step(&conv);
+    QuicConversation_step(&conv, 0);
     /* client has generated handshake secret */
     check_secrets(&tclient, wolfssl_encryption_handshake, 32, 32);
     /* continue the handshake till done */
@@ -1143,6 +1174,102 @@ static int test_quic_server_hello(int verbose) {
     return ret;
 }
 
+/* This has gotten a bit out of hand. */
+#if (defined(OPENSSL_ALL) || (defined(OPENSSL_EXTRA) && \
+    (defined(HAVE_STUNNEL) || defined(WOLFSSL_NGINX) || \
+    defined(HAVE_LIGHTY) || defined(WOLFSSL_HAPROXY) || \
+    defined(WOLFSSL_OPENSSH) || defined(HAVE_SBLIM_SFCB)))) \
+    && defined(HAVE_ALPN) && defined(HAVE_SNI)
+#define REALLY_HAVE_ALPN_AND_SNI
+#else
+#undef REALLY_HAVE_ALPN_AND_SNI
+#endif
+
+#ifdef REALLY_HAVE_ALPN_AND_SNI
+struct stripe_buffer {
+    char stripe[256];
+};
+
+static int inspect_SNI(WOLFSSL *ssl, int *ad, void *baton)
+{
+    struct stripe_buffer *stripe = (struct stripe_buffer *)baton;
+
+    (void)ssl;
+    *ad = 0;
+    XSTRLCAT(stripe->stripe, "S", sizeof(stripe->stripe));
+    return 0;
+}
+
+static int select_ALPN(WOLFSSL *ssl,
+            const unsigned char **out,
+            unsigned char *outlen,
+            const unsigned char *in,
+            unsigned int inlen,
+            void *baton)
+{
+    struct stripe_buffer *stripe = (struct stripe_buffer *)baton;
+
+    (void)ssl;
+    (void)inlen;
+    /* just select the first */
+    *out = in + 1;
+    *outlen = in[0];
+    XSTRLCAT(stripe->stripe, "A", sizeof(stripe->stripe));
+    return 0;
+}
+
+static int test_quic_alpn(int verbose) {
+    WOLFSSL_CTX *ctx_c, *ctx_s;
+    int ret = 0;
+    QuicTestContext tclient, tserver;
+    QuicConversation conv;
+    struct stripe_buffer stripe;
+    unsigned char alpn_protos[256];
+
+    AssertNotNull(ctx_c = wolfSSL_CTX_new(wolfTLSv1_3_client_method()));
+    AssertNotNull(ctx_s = wolfSSL_CTX_new(wolfTLSv1_3_server_method()));
+    AssertTrue(wolfSSL_CTX_use_certificate_file(ctx_s, svrCertFile, WOLFSSL_FILETYPE_PEM));
+    AssertTrue(wolfSSL_CTX_use_PrivateKey_file(ctx_s, svrKeyFile, WOLFSSL_FILETYPE_PEM));
+
+    stripe.stripe[0] = '\0';
+    wolfSSL_CTX_set_servername_callback(ctx_s, inspect_SNI);
+    wolfSSL_CTX_set_servername_arg(ctx_s, &stripe);
+    wolfSSL_CTX_set_alpn_select_cb(ctx_s, select_ALPN, &stripe);
+
+    /* setup ssls */
+    QuicTestContext_init(&tclient, ctx_c, "client", verbose);
+    QuicTestContext_init(&tserver, ctx_s, "server", verbose);
+
+    /* set SNI and ALPN callbacks on server side,
+     * provide values on client side */
+    wolfSSL_UseSNI(tclient.ssl, WOLFSSL_SNI_HOST_NAME,
+                   "wolfssl.com", sizeof("wolfssl.com")-1);
+    /* connect */
+    QuicConversation_init(&conv, &tclient, &tserver);
+
+    XSTRLCPY((char*)(alpn_protos + 1), "test", sizeof(alpn_protos));
+    alpn_protos[0] = strlen("test");
+    wolfSSL_set_alpn_protos(tclient.ssl, alpn_protos, 1 + strlen("test"));
+
+    QuicConversation_do(&conv);
+    AssertIntEQ(tclient.output.len, 0);
+    AssertIntEQ(tserver.output.len, 0);
+
+    /* SNI callback needs to be called before ALPN callback */
+    AssertStrEQ(stripe.stripe, "SA");
+
+    QuicTestContext_free(&tclient);
+    QuicTestContext_free(&tserver);
+
+    wolfSSL_CTX_free(ctx_c);
+    wolfSSL_CTX_free(ctx_s);
+    printf("    test_quic_alpn: %s\n", (ret == 0)? passed : failed);
+
+    return ret;
+}
+#endif /* REALLY_HAVE_ALPN_AND_SNI */
+
+
 #ifdef HAVE_SESSION_TICKET
 
 static int test_quic_key_share(int verbose) {
@@ -1166,8 +1293,9 @@ static int test_quic_key_share(int verbose) {
     QuicTestContext_free(&tclient);
     QuicTestContext_free(&tserver);
 
-    /* setup & handshake, restricted groups, will trigger a
-     * HelloRetryRequest(ServerHello) and a new ClientHello */
+    /* setup & handshake, restricted groups. KEY_SHARE should use
+     * the first configured group. */
+    /*If that is supported by the server, expect a smooth handshake.*/
     QuicTestContext_init(&tclient, ctx_c, "client", verbose);
     QuicTestContext_init(&tserver, ctx_s, "server", verbose);
     AssertTrue(wolfSSL_set1_curves_list(tclient.ssl, "X25519:P-256")
@@ -1177,10 +1305,42 @@ static int test_quic_key_share(int verbose) {
     QuicConversation_init(&conv, &tclient, &tserver);
     QuicConversation_do(&conv);
     AssertStrEQ(conv.rec_log,
+        "ClientHello:ServerHello:EncryptedExtension:"
+            "Certificate:CertificateVerify:Finished:Finished:SessionTicket");
+    QuicTestContext_free(&tclient);
+    QuicTestContext_free(&tserver);
+    printf("    test_quic_key_share: priority ok\n");
+
+    /* If group is not supported by server, expect HelloRetry */
+    QuicTestContext_init(&tclient, ctx_c, "client", verbose);
+    QuicTestContext_init(&tserver, ctx_s, "server", verbose);
+    AssertTrue(wolfSSL_set1_curves_list(tclient.ssl, "X25519:P-256")
+               == WOLFSSL_SUCCESS);
+    AssertTrue(wolfSSL_set1_curves_list(tserver.ssl, "P-256")
+               == WOLFSSL_SUCCESS);
+    QuicConversation_init(&conv, &tclient, &tserver);
+    QuicConversation_do(&conv);
+    AssertStrEQ(conv.rec_log,
         "ClientHello:ServerHello:ClientHello:ServerHello:EncryptedExtension:"
             "Certificate:CertificateVerify:Finished:Finished:SessionTicket");
     QuicTestContext_free(&tclient);
     QuicTestContext_free(&tserver);
+    printf("    test_quic_key_share: retry ok\n");
+
+    /* If no group overlap, expect failure */
+    QuicTestContext_init(&tclient, ctx_c, "client", verbose);
+    QuicTestContext_init(&tserver, ctx_s, "server", verbose);
+    AssertTrue(wolfSSL_set1_curves_list(tclient.ssl, "P-256")
+               == WOLFSSL_SUCCESS);
+    AssertTrue(wolfSSL_set1_curves_list(tserver.ssl, "X25519")
+               == WOLFSSL_SUCCESS);
+    QuicConversation_init(&conv, &tclient, &tserver);
+    QuicConversation_fail(&conv);
+    AssertIntEQ(wolfSSL_get_error(tserver.ssl, 0), SSL_ERROR_WANT_READ);
+    AssertIntEQ(wolfSSL_get_error(tclient.ssl, 0), BAD_KEY_SHARE_DATA);
+    QuicTestContext_free(&tclient);
+    QuicTestContext_free(&tserver);
+    printf("    test_quic_key_share: no match ok\n");
 
     wolfSSL_CTX_free(ctx_c);
     wolfSSL_CTX_free(ctx_s);
@@ -1472,11 +1632,14 @@ int QuicTest(void)
     if ((ret = test_quic_crypt()) != 0) goto leave;
     if ((ret = test_quic_client_hello(verbose)) != 0) goto leave;
     if ((ret = test_quic_server_hello(verbose)) != 0) goto leave;
+#ifdef REALLY_HAVE_ALPN_AND_SNI
+    if ((ret = test_quic_alpn(verbose)) != 0) goto leave;
+#endif /* REALLY_HAVE_ALPN_AND_SNI */
 #ifdef HAVE_SESSION_TICKET
     if ((ret = test_quic_key_share(verbose)) != 0) goto leave;
     if ((ret = test_quic_resumption(verbose)) != 0) goto leave;
 #ifdef WOLFSSL_EARLY_DATA
-    if ((ret = test_quic_early_data(verbose || 1)) != 0) goto leave;
+    if ((ret = test_quic_early_data(verbose)) != 0) goto leave;
 #endif /* WOLFSSL_EARLY_DATA */
     if ((ret = test_quic_session_export(verbose)) != 0) goto leave;
 #endif /* HAVE_SESSION_TICKET */

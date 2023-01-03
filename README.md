@@ -1,4 +1,4 @@
-# WOLFSSL 5.5.0
+# WOLFSSL 5.5.4
 [https://github.com/wolfSSL/wolfssl](https://github.com/wolfSSL/wolfssl)   
   
 **TARGETS**   
@@ -58,7 +58,7 @@ sudo cp -v $(pwd)/osxcross/build/compiler-rt/compiler-rt/build/lib/darwin/*.dyli
 **BUILD WOLFSSL (linux-i686)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export CC=gcc-4.9
 export AR=gcc-ar-4.9
 export RANLIB=gcc-ranlib-4.9
@@ -74,7 +74,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (linux-x86_64)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export CC=gcc-4.9
 export AR=gcc-ar-4.9
 export RANLIB=gcc-ranlib-4.9
@@ -90,7 +90,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (linux-armel)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export CC=arm-linux-gnueabi-gcc-4.9
 export AR=arm-linux-gnueabi-gcc-ar-4.9
 export RANLIB=arm-linux-gnueabi-gcc-ranlib-4.9
@@ -105,7 +105,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (linux-armhf)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export CC=arm-linux-gnueabihf-gcc-4.9
 export AR=arm-linux-gnueabihf-gcc-ar-4.9
 export RANLIB=arm-linux-gnueabihf-gcc-ranlib-4.9
@@ -120,7 +120,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (linux-aarch64)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export CC=aarch64-linux-gnu-gcc-4.9
 export AR=aarch64-linux-gnu-gcc-ar-4.9
 export RANLIB=aarch64-linux-gnu-gcc-ranlib-4.9
@@ -135,7 +135,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (android-21-armeabi-v7a)**
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export TOOLCHAIN=$(pwd)/android-ndk-r20b/toolchains/llvm/prebuilt/linux-x86_64
 export AR=$TOOLCHAIN/bin/arm-linux-androideabi-ar
 export AS=$TOOLCHAIN/bin/arm-linux-androideabi-as
@@ -155,7 +155,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (android-21-arm64-v8a)**
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export TOOLCHAIN=$(pwd)/android-ndk-r20b/toolchains/llvm/prebuilt/linux-x86_64
 export AR=$TOOLCHAIN/bin/aarch64-linux-android-ar
 export AS=$TOOLCHAIN/bin/aarch64-linux-android-as
@@ -175,7 +175,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (android-21-x86)**
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export TOOLCHAIN=$(pwd)/android-ndk-r20b/toolchains/llvm/prebuilt/linux-x86_64
 export AR=$TOOLCHAIN/bin/i686-linux-android-ar
 export AS=$TOOLCHAIN/bin/i686-linux-android-as
@@ -195,7 +195,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (android-21-x86_64)**
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export TOOLCHAIN=$(pwd)/android-ndk-r20b/toolchains/llvm/prebuilt/linux-x86_64
 export AR=$TOOLCHAIN/bin/x86_64-linux-android-ar
 export AS=$TOOLCHAIN/bin/x86_64-linux-android-as
@@ -216,7 +216,7 @@ Get files from wolfssl/out
 Open "Ubuntu 18.04 LTS"   
 ```
 git clone https://github.com/raspberrypi/tools.git raspberrypi --depth=1
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export PATH=$(pwd)/raspberrypi/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin:$PATH
 export CC=arm-linux-gnueabihf-gcc
 export AR=arm-linux-gnueabihf-gcc-ar
@@ -232,7 +232,7 @@ Get files from wolfssl/out
 **BUILD WOLFSSL (osx-x86_64)**   
 * Open "Ubuntu 18.04 LTS"   
 ```
-git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.0-stable --depth=1
+git clone https://github.com/wolfSSL/wolfssl.git -b v5.5.4-stable --depth=1
 export PATH=$(pwd)/osxcross/target/bin:$PATH
 export CC=x86_64-apple-darwin19-clang
 export AR=x86_64-apple-darwin19-ar

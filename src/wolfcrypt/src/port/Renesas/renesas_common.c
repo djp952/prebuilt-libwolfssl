@@ -66,7 +66,7 @@ WOLFSSL_LOCAL int Renesas_cmn_RsaSignCb(WOLFSSL* ssl,
                                 const unsigned char* keyDer, unsigned int keySz,
                                 void* ctx)
 {
-    int ret = NOT_COMPILED_IN;
+    int ret = CRYPTOCB_UNAVAILABLE;
     WOLFSSL_ENTER("Renesas_cmn_RsaSignCb");
 
     /* This is just a stub function that provides no logic */
@@ -81,7 +81,7 @@ WOLFSSL_LOCAL int Renesas_cmn_EccSignCb(WOLFSSL* ssl,
                                 const unsigned char* keyDer, unsigned int keySz,
                                 void* ctx)
 {
-    int ret = NOT_COMPILED_IN;
+    int ret = CRYPTOCB_UNAVAILABLE;
     WOLFSSL_ENTER("Renesas_cmn_EccSignCb");
 
     /* This is just a stub function that provides no logic */
@@ -118,6 +118,7 @@ static int Renesas_cmn_CryptoDevCb(int devIdArg, wc_CryptoInfo* info, void* ctx)
 #endif
 
 #if defined(WOLFSSL_RENESAS_TSIP)
+    ret = CRYPTOCB_UNAVAILABLE;
 
     if (info->algo_type == WC_ALGO_TYPE_CIPHER) {
 
@@ -327,7 +328,7 @@ static int Renesas_cmn_CryptoDevCb(int devIdArg, wc_CryptoInfo* info, void* ctx)
 
     (void)devIdArg;
     (void)ctx;
-
+    WOLFSSL_LEAVE("Renesas_cmn_CryptoDevCb", ret);
     return ret;
 }
 
@@ -593,11 +594,12 @@ int wc_Renesas_cmn_RootCertVerify(const byte* cert, word32 cert_len, word32 key_
  * return FSP_SUCCESS(0) on success, otherwise FSP/TSIP error code
  */
 WOLFSSL_LOCAL int Renesas_cmn_TlsFinished(WOLFSSL* ssl, const byte *side,
-                            const byte *handshake_hash,
+                            const byte *handshake_hash, word32 hashSz,
                             byte *hashes, void* ctx)
 {
     int ret = -1;
 
+    (void)hashSz;
     (void)ctx;
 
     WOLFSSL_ENTER("Renesas_cmn_TlsFinished");

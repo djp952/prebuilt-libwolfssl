@@ -133,7 +133,10 @@ decouple library dependencies with standard string, memory and so on.
                 defined(_ARCH_PPC64) || defined(__mips64) || \
                 defined(__x86_64__)  || defined(__s390x__ ) || \
                 ((defined(sun) || defined(__sun)) && \
-                 (defined(LP64) || defined(_LP64))))
+                 (defined(LP64) || defined(_LP64))) || \
+                (defined(__riscv_xlen) && (__riscv_xlen == 64)) || \
+                defined(__aarch64__) || \
+                (defined(__DCC__) && (defined(__LP64) || defined(__LP64__))))
                 /* long should be 64bit */
                 #define SIZEOF_LONG 8
             #elif defined(__i386__) || defined(__CORTEX_M3__)
@@ -173,9 +176,14 @@ decouple library dependencies with standard string, memory and so on.
 #if defined(WORD64_AVAILABLE) && !defined(WC_16BIT_CPU)
     /* These platforms have 64-bit CPU registers.  */
     #if (defined(__alpha__) || defined(__ia64__) || defined(_ARCH_PPC64) || \
-         defined(__mips64)  || defined(__x86_64__) || defined(_M_X64)) || \
+        (defined(__mips64) && \
+         ((defined(_ABI64) && (_MIPS_SIM == _ABI64)) || \
+          (defined(_ABIO64) && (_MIPS_SIM == _ABIO64)))) || \
+         defined(__x86_64__) || defined(_M_X64)) || \
          defined(__aarch64__) || defined(__sparc64__) || defined(__s390x__ ) || \
-        (defined(__riscv_xlen) && (__riscv_xlen == 64)) || defined(_M_ARM64)
+        (defined(__riscv_xlen) && (__riscv_xlen == 64)) || defined(_M_ARM64) || \
+        defined(__aarch64__) || \
+        (defined(__DCC__) && (defined(__LP64) || defined(__LP64__)))
         #define WC_64BIT_CPU
     #elif (defined(sun) || defined(__sun)) && \
           (defined(LP64) || defined(_LP64))
@@ -240,6 +248,7 @@ typedef struct w64wrapper {
     };
 
     #define WOLFSSL_MAX_16BIT 0xffffU
+    #define WOLFSSL_MAX_32BIT 0xffffffffU
 
     /* use inlining if compiler allows */
     #ifndef WC_INLINE
@@ -788,7 +797,7 @@ typedef struct w64wrapper {
 
         #if defined(WOLFSSL_CERT_EXT) || defined(HAVE_OCSP) || \
             defined(HAVE_CRL_IO) || defined(HAVE_HTTP_CLIENT) || \
-            !defined(NO_CRYPT_BENCHMARK)
+            !defined(NO_CRYPT_BENCHMARK) || defined(OPENSSL_EXTRA)
 
             #ifndef XATOI /* if custom XATOI is not already defined */
                 #include <stdlib.h>
@@ -945,6 +954,7 @@ typedef struct w64wrapper {
         DYNAMIC_TYPE_FALCON       = 95,
         DYNAMIC_TYPE_SESSION      = 96,
         DYNAMIC_TYPE_DILITHIUM    = 97,
+        DYNAMIC_TYPE_SPHINCS      = 98,
         DYNAMIC_TYPE_SNIFFER_SERVER     = 1000,
         DYNAMIC_TYPE_SNIFFER_SESSION    = 1001,
         DYNAMIC_TYPE_SNIFFER_PB         = 1002,
@@ -1010,9 +1020,6 @@ typedef struct w64wrapper {
         #ifndef WOLFSSL_NOSHA512_256
             #define WOLFSSL_NOSHA512_256
         #endif
-        #ifndef WOLFSSL_NO_SHAKE256
-            #define WOLFSSL_NO_SHAKE256
-        #endif
     #else
         WC_HASH_TYPE_NONE = 0,
         WC_HASH_TYPE_MD2 = 1,
@@ -1030,25 +1037,27 @@ typedef struct w64wrapper {
         WC_HASH_TYPE_SHA3_512 = 13,
         WC_HASH_TYPE_BLAKE2B = 14,
         WC_HASH_TYPE_BLAKE2S = 15,
-#define _WC_HASH_TYPE_MAX WC_HASH_TYPE_BLAKE2S
+        #define _WC_HASH_TYPE_MAX WC_HASH_TYPE_BLAKE2S
         #ifndef WOLFSSL_NOSHA512_224
             WC_HASH_TYPE_SHA512_224 = 16,
-#undef _WC_HASH_TYPE_MAX
-#define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHA512_224
+            #undef _WC_HASH_TYPE_MAX
+            #define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHA512_224
         #endif
         #ifndef WOLFSSL_NOSHA512_256
             WC_HASH_TYPE_SHA512_256 = 17,
-#undef _WC_HASH_TYPE_MAX
-#define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHA512_256
+            #undef _WC_HASH_TYPE_MAX
+            #define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHA512_256
         #endif
-        #ifndef WOLFSSL_NO_SHAKE256
+        #ifdef WOLFSSL_SHAKE128
             WC_HASH_TYPE_SHAKE128 = 18,
+        #endif
+        #ifdef WOLFSSL_SHAKE256
             WC_HASH_TYPE_SHAKE256 = 19,
-#undef _WC_HASH_TYPE_MAX
-#define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHAKE256
+            #undef _WC_HASH_TYPE_MAX
+            #define _WC_HASH_TYPE_MAX WC_HASH_TYPE_SHAKE256
         #endif
         WC_HASH_TYPE_MAX = _WC_HASH_TYPE_MAX
-#undef _WC_HASH_TYPE_MAX
+        #undef _WC_HASH_TYPE_MAX
 
     #endif /* HAVE_SELFTEST */
     };
@@ -1131,7 +1140,8 @@ typedef struct w64wrapper {
     /* AESNI requires alignment and ARMASM gains some performance from it
      * Xilinx RSA operations require alignment */
     #if defined(WOLFSSL_AESNI) || defined(WOLFSSL_ARMASM) || \
-        defined(USE_INTEL_SPEEDUP) || defined(WOLFSSL_AFALG_XILINX)
+        defined(USE_INTEL_SPEEDUP) || defined(WOLFSSL_AFALG_XILINX) || \
+        defined(WOLFSSL_XILINX)
           #ifndef WOLFSSL_USE_ALIGN
               #define WOLFSSL_USE_ALIGN
           #endif
@@ -1233,6 +1243,53 @@ typedef struct w64wrapper {
         #define FALSE 0
     #endif
 
+    #ifdef SINGLE_THREADED
+        #if defined(WC_32BIT_CPU)
+            typedef void*        THREAD_RETURN;
+        #else
+            typedef unsigned int THREAD_RETURN;
+        #endif
+        typedef void*            THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif defined(WOLFSSL_MDK_ARM) || defined(WOLFSSL_KEIL_TCP_NET) || \
+          defined(FREESCALE_MQX)
+        typedef unsigned int  THREAD_RETURN;
+        typedef int           THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif defined(WOLFSSL_NUCLEUS)
+        typedef unsigned int  THREAD_RETURN;
+        typedef intptr_t      THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif defined(WOLFSSL_TIRTOS)
+        typedef void          THREAD_RETURN;
+        typedef Task_Handle   THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif defined(WOLFSSL_ZEPHYR)
+        typedef void            THREAD_RETURN;
+        typedef struct k_thread THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif defined(NETOS)
+        typedef UINT        THREAD_RETURN;
+        typedef TX_THREAD   THREAD_TYPE;
+        #define WOLFSSL_THREAD
+        #define INFINITE TX_WAIT_FOREVER
+        #define WAIT_OBJECT_0 TX_NO_WAIT
+    #elif defined(WOLFSSL_LINUXKM)
+        typedef unsigned int  THREAD_RETURN;
+        typedef size_t        THREAD_TYPE;
+        #define WOLFSSL_THREAD
+    #elif (defined(_POSIX_THREADS) || defined(HAVE_PTHREAD)) && \
+        !defined(__MINGW32__)
+        typedef void*         THREAD_RETURN;
+        typedef pthread_t     THREAD_TYPE;
+        #define WOLFSSL_THREAD
+        #define INFINITE      (-1)
+        #define WAIT_OBJECT_0 0L
+    #else
+        typedef unsigned int  THREAD_RETURN;
+        typedef size_t        THREAD_TYPE;
+        #define WOLFSSL_THREAD __stdcall
+    #endif
 
     #if defined(HAVE_STACK_SIZE)
         #define EXIT_TEST(ret) return (THREAD_RETURN)((size_t)(ret))

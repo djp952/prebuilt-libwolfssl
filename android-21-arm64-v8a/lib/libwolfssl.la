@@ -23,8 +23,8 @@ dependency_libs=' -lm -ldl'
 weak_library_names=''
 
 # Version information for libwolfssl.
-current=35
-age=0
+current=38
+age=3
 revision=0
 
 # Is this an already installed library?

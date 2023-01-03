@@ -182,6 +182,10 @@ int wc_ed25519_make_public(ed25519_key* key, unsigned char* pubKey,
     if (key == NULL || pubKey == NULL || pubKeySz != ED25519_PUB_KEY_SIZE)
         ret = BAD_FUNC_ARG;
 
+    if ((ret == 0) && (!key->privKeySet)) {
+        ret = ECC_PRIV_KEY_E;
+    }
+
     if (ret == 0)
         ret = ed25519_hash(key, key->k, ED25519_KEY_SIZE, az);
     if (ret == 0) {
@@ -201,6 +205,8 @@ int wc_ed25519_make_public(ed25519_key* key, unsigned char* pubKey,
         ge_scalarmult_base(&A, az);
         ge_p3_tobytes(pubKey, &A);
     #endif
+
+        key->pubKeySet = 1;
     }
 
     return ret;
@@ -220,6 +226,9 @@ int wc_ed25519_make_key(WC_RNG* rng, int keySz, ed25519_key* key)
     if (keySz != ED25519_KEY_SIZE)
         return BAD_FUNC_ARG;
 
+    key->privKeySet = 0;
+    key->pubKeySet = 0;
+
 #ifdef WOLF_CRYPTO_CB
     if (key->devId != INVALID_DEVID) {
         ret = wc_CryptoCb_Ed25519Gen(rng, keySz, key);
@@ -233,17 +242,16 @@ int wc_ed25519_make_key(WC_RNG* rng, int keySz, ed25519_key* key)
     if (ret != 0)
         return ret;
 
+    key->privKeySet = 1;
     ret = wc_ed25519_make_public(key, key->p, ED25519_PUB_KEY_SIZE);
     if (ret != 0) {
+        key->privKeySet = 0;
         ForceZero(key->k, ED25519_KEY_SIZE);
         return ret;
     }
 
     /* put public key after private key, on the same buffer */
     XMEMMOVE(key->k + ED25519_KEY_SIZE, key->p, ED25519_PUB_KEY_SIZE);
-
-    key->privKeySet = 1;
-    key->pubKeySet = 1;
 
     return ret;
 }
@@ -689,7 +697,7 @@ static int ed25519_verify_msg_final_with_sha(const byte* sig, word32 sigLen,
 }
 #endif /* WOLFSSL_SE050 */
 
-#ifdef WOLFSSL_ED25519_STREAMING_VERIFY
+#if defined(WOLFSSL_ED25519_STREAMING_VERIFY) && !defined(WOLFSSL_SE050)
 
 int wc_ed25519_verify_msg_init(const byte* sig, word32 sigLen, ed25519_key* key,
                                byte type, const byte* context, byte contextLen) {
@@ -709,7 +717,7 @@ int wc_ed25519_verify_msg_final(const byte* sig, word32 sigLen, int* res,
                                          key, &key->sha);
 }
 
-#endif /* WOLFSSL_ED25519_STREAMING_VERIFY */
+#endif /* WOLFSSL_ED25519_STREAMING_VERIFY && !WOLFSSL_SE050 */
 
 /*
    sig     is array of bytes containing the signature

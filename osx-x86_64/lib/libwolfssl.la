@@ -14,7 +14,7 @@ library_names=''
 old_library='libwolfssl.a'
 
 # Linker flags that cannot go in dependency_libs.
-inherited_linker_flags='  -pthread'
+inherited_linker_flags='  -pthread -framework CoreFoundation -framework Security'
 
 # Libraries that this one depends upon.
 dependency_libs=' -lnetwork -ldl -lpthread'
@@ -23,8 +23,8 @@ dependency_libs=' -lnetwork -ldl -lpthread'
 weak_library_names=''
 
 # Version information for libwolfssl.
-current=35
-age=0
+current=38
+age=3
 revision=0
 
 # Is this an already installed library?

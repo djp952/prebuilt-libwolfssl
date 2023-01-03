@@ -273,7 +273,6 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
     }
     ssl->quic.enc_level_write = wolfssl_encryption_initial;
     ssl->quic.enc_level_latest_recvd = wolfssl_encryption_initial;
-    ssl->quic.early_data_enabled = 0;
 
     while ((qd = ssl->quic.input_head)) {
         ssl->quic.input_head = qd->next;
@@ -303,9 +302,15 @@ void wolfSSL_quic_free(WOLFSSL* ssl)
 
 static int ctx_check_quic_compat(const WOLFSSL_CTX* ctx)
 {
+    WOLFSSL_ENTER("ctx_check_quic_compat");
     if (ctx->method->version.major != SSLv3_MAJOR
         || ctx->method->version.minor != TLSv1_3_MINOR
-        || ctx->method->downgrade) {
+        || (ctx->method->downgrade && ctx->minDowngrade < TLSv1_3_MINOR)) {
+        WOLFSSL_MSG_EX("ctx not quic compatible: vmajor=%d, vminor=%d, downgrade=%d",
+                       ctx->method->version.major,
+                       ctx->method->version.minor,
+                       ctx->method->downgrade
+                      );
         return WOLFSSL_FAILURE;
     }
     return WOLFSSL_SUCCESS;
@@ -313,6 +318,7 @@ static int ctx_check_quic_compat(const WOLFSSL_CTX* ctx)
 
 static int check_method_sanity(const WOLFSSL_QUIC_METHOD* m)
 {
+    WOLFSSL_ENTER("check_method_sanity");
     if (m && m->set_encryption_secrets
         && m->add_handshake_data
         && m->flush_flight
@@ -325,6 +331,7 @@ static int check_method_sanity(const WOLFSSL_QUIC_METHOD* m)
 int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX* ctx,
                                 const WOLFSSL_QUIC_METHOD* quic_method)
 {
+    WOLFSSL_ENTER("wolfSSL_CTX_set_quic_method");
     if (ctx_check_quic_compat(ctx) != WOLFSSL_SUCCESS
         || check_method_sanity(quic_method) != WOLFSSL_SUCCESS) {
         return WOLFSSL_FAILURE;
@@ -337,6 +344,7 @@ int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX* ctx,
 int wolfSSL_set_quic_method(WOLFSSL* ssl,
                             const WOLFSSL_QUIC_METHOD* quic_method)
 {
+    WOLFSSL_ENTER("wolfSSL_set_quic_method");
     if (ctx_check_quic_compat(ssl->ctx) != WOLFSSL_SUCCESS
         || check_method_sanity(quic_method) != WOLFSSL_SUCCESS) {
         return WOLFSSL_FAILURE;
@@ -547,10 +555,7 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL* ssl, int enabled)
         WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: handshake started");
     }
     else {
-        ssl->quic.early_data_enabled = enabled;
-        if (ssl->options.side != WOLFSSL_CLIENT_END) {
-            wolfSSL_set_max_early_data(ssl, enabled ? UINT32_MAX : 0);
-        }
+        wolfSSL_set_max_early_data(ssl, enabled ? UINT32_MAX : 0);
     }
 }
 #endif /* WOLFSSL_EARLY_DATA */
@@ -578,7 +583,7 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
          * This confuses the QUIC state handling.
          */
 #ifdef WOLFSSL_EARLY_DATA
-        if (ssl->quic.early_data_enabled) {
+        if (ssl->options.maxEarlyDataSz) {
             byte tmpbuffer[256];
             int len;
 
@@ -587,7 +592,7 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
                     ret = wolfSSL_write_early_data(ssl, tmpbuffer, 0, &len);
                 }
             }
-            else if (/*disables code*/(1)) {
+            else {
                 ret = wolfSSL_read_early_data(ssl, tmpbuffer,
                                               sizeof(tmpbuffer), &len);
                 if (ret < 0 && ssl->error == ZERO_RETURN) {
@@ -602,7 +607,7 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
         }
 #endif /* WOLFSSL_EARLY_DATA */
 
-        ret = wolfSSL_SSL_do_handshake(ssl);
+        ret = wolfSSL_SSL_do_handshake_internal(ssl);
         if (ret <= 0)
             goto cleanup;
     }
@@ -1006,7 +1011,7 @@ const WOLFSSL_EVP_CIPHER* wolfSSL_quic_get_hp(WOLFSSL* ssl)
 #endif
 #if defined(HAVE_CHACHA) && defined(HAVE_POLY1305)
         case TLS_CHACHA20_POLY1305_SHA256:
-            evp_cipher = wolfSSL_EVP_chacha20_poly1305();
+            evp_cipher = wolfSSL_EVP_chacha20();
             break;
 #endif
 #if defined(WOLFSSL_AES_COUNTER) && defined(WOLFSSL_AES_128)

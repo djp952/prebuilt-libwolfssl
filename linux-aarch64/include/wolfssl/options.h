@@ -21,10 +21,8 @@ extern "C" {
 #undef  NO_DO178
 #define NO_DO178
 
-#ifndef WOLFSSL_OPTIONS_IGNORE_SYS
-#undef  _POSIX_THREADS
-#define _POSIX_THREADS
-#endif
+#undef  ERROR_QUEUE_PER_THREAD
+#define ERROR_QUEUE_PER_THREAD
 
 #undef  TFM_TIMING_RESISTANT
 #define TFM_TIMING_RESISTANT
@@ -73,6 +71,9 @@ extern "C" {
 
 #undef  WOLFSSL_SHA3
 #define WOLFSSL_SHA3
+
+#undef  WOLFSSL_NO_SHAKE128
+#define WOLFSSL_NO_SHAKE128
 
 #undef  WOLFSSL_NO_SHAKE256
 #define WOLFSSL_NO_SHAKE256
@@ -136,6 +137,9 @@ extern "C" {
 
 #undef  HAVE_DH_DEFAULT_PARAMS
 #define HAVE_DH_DEFAULT_PARAMS
+
+#undef  WOLFSSL_SYS_CA_CERTS
+#define WOLFSSL_SYS_CA_CERTS
 
 #undef  OPENSSL_EXTRA
 #define OPENSSL_EXTRA

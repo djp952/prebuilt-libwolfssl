@@ -621,7 +621,7 @@ WOLF_STACK_OF(WOLFSSL_X509)* wolfSSL_X509_STORE_get1_certs(
     }
 
     if (err == 0) {
-        filteredCerts = wolfSSL_sk_X509_new();
+        filteredCerts = wolfSSL_sk_X509_new_null();
         if (filteredCerts == NULL) {
             err = 1;
         }
@@ -736,6 +736,10 @@ WOLFSSL_X509_STORE* wolfSSL_X509_STORE_new(void)
 #endif
 
 #if defined(OPENSSL_EXTRA) || defined(WOLFSSL_WPAS_SMALL)
+
+    /* Link store's new Certificate Manager to self by default */
+    store->cm->x509_store_p = store;
+
     if ((store->param = (WOLFSSL_X509_VERIFY_PARAM*)XMALLOC(
                            sizeof(WOLFSSL_X509_VERIFY_PARAM),
                            NULL, DYNAMIC_TYPE_OPENSSL)) == NULL) {
@@ -1138,7 +1142,7 @@ WOLFSSL_STACK* wolfSSL_X509_STORE_GetCerts(WOLFSSL_X509_STORE_CTX* s)
         return NULL;
     }
 
-    sk = wolfSSL_sk_X509_new();
+    sk = wolfSSL_sk_X509_new_null();
 
     if (sk == NULL) {
         return NULL;

@@ -1494,7 +1494,7 @@ int wc_EccPublicKeyDecode(const byte* input, word32* inOutIdx,
     \code
     ecc_key key;
     wc_ecc_init(&key);
-    WC_WC_RNG rng;
+    WC_RNG rng;
     wc_InitRng(&rng);
     wc_ecc_make_key(&rng, 32, &key);
     int derSz = // Some appropriate size for der;
@@ -1538,7 +1538,7 @@ int wc_EccPublicKeyToDer(ecc_key* key, byte* output,
     \code
     ecc_key key;
     wc_ecc_init(&key);
-    WC_WC_RNG rng;
+    WC_RNG rng;
     wc_InitRng(&rng);
     wc_ecc_make_key(&rng, 32, &key);
     int derSz = // Some appropriate size for der;
@@ -2047,6 +2047,10 @@ time_t wc_Time(time_t* t);
     \ingroup ASN
 
     \brief This function injects a custom extension in to an X.509 certificate.
+     note: The content at the address pointed to by any of the parameters that
+           are pointers must not be modified until the certificate is generated
+           and you have the der output. This function does NOT copy the
+           contents to another buffer.
 
     \return 0 Returned on success.
     \return Other negative values on failure.

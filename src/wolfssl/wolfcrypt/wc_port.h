@@ -217,6 +217,12 @@
         } wolfSSL_Mutex;
     #elif defined(USE_WINDOWS_API)
         typedef CRITICAL_SECTION wolfSSL_Mutex;
+    #elif defined(MAXQ10XX_MUTEX)
+        #include <sys/mman.h>
+        #include <fcntl.h>
+        #include <pthread.h>
+        typedef pthread_mutex_t wolfSSL_Mutex;
+        int maxq_CryptHwMutexTryLock(void);
     #elif defined(WOLFSSL_PTHREADS)
         typedef pthread_mutex_t wolfSSL_Mutex;
     #elif defined(THREADX)
@@ -278,37 +284,50 @@
 
 /* Reference counting. */
 typedef struct wolfSSL_Ref {
-/* TODO: use atomic operations instead of mutex. */
-#ifndef SINGLE_THREADED
+#if !defined(SINGLE_THREADED) && !defined(HAVE_C___ATOMIC)
     wolfSSL_Mutex mutex;
 #endif
     int count;
 } wolfSSL_Ref;
 
 #ifdef SINGLE_THREADED
-#define wolfSSL_RefInit(ref, err)           \
-    do {                                    \
-        (ref)->count = 1;                   \
-        *(err) = 0;                         \
-    }                                       \
-    while (0)
-
+#define wolfSSL_RefInit(ref, err)            \
+    do {                                     \
+        (ref)->count = 1;                    \
+        *(err) = 0;                          \
+    } while(0)
 #define wolfSSL_RefFree(ref)
-
-#define wolfSSL_RefInc(ref, err)            \
-    do {                                    \
-        (ref)->count++;                     \
-        *(err) = 0;                         \
-    }                                       \
-    while (0)
-
-#define wolfSSL_RefDec(ref, isZero, err)    \
-    do {                                    \
-        (ref)->count--;                     \
-        *(isZero) = ((ref)->count == 0);    \
-        *(err) = 0;                         \
-    }                                       \
-    while (0)
+    #define wolfSSL_RefInc(ref, err)         \
+    do {                                     \
+        (ref)->count++;                      \
+        *(err) = 0;                          \
+    } while(0)
+#define wolfSSL_RefDec(ref, isZero, err)     \
+    do {                                     \
+        (ref)->count--;                      \
+        *(isZero) = ((ref)->count == 0);     \
+        *(err) = 0;                          \
+    } while(0)
+#elif defined(HAVE_C___ATOMIC)
+#define wolfSSL_RefInit(ref, err)            \
+    do {                                     \
+        (ref)->count = 1;                    \
+        *(err) = 0;                          \
+    } while(0)
+#define wolfSSL_RefFree(ref)
+#define wolfSSL_RefInc(ref, err)             \
+    do {                                     \
+        __atomic_fetch_add(&(ref)->count, 1, \
+            __ATOMIC_RELAXED);               \
+        *(err) = 0;                          \
+    } while(0)
+#define wolfSSL_RefDec(ref, isZero, err)     \
+    do {                                     \
+        __atomic_fetch_sub(&(ref)->count, 1, \
+            __ATOMIC_RELAXED);               \
+        *(isZero) = ((ref)->count == 0);     \
+        *(err) = 0;                          \
+    } while(0)
 #else
 WOLFSSL_LOCAL void wolfSSL_RefInit(wolfSSL_Ref* ref, int* err);
 WOLFSSL_LOCAL void wolfSSL_RefFree(wolfSSL_Ref* ref);
@@ -755,6 +774,7 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
         #define XTIME(t1)       xilinx_time((t1))
     #endif
     #include <time.h>
+    time_t xilinx_time(time_t * timer);
 
 #elif defined(HAVE_RTP_SYS)
     #include "os.h"           /* dc_rtc_api needs    */
@@ -764,9 +784,12 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
     #define XTIME(tl)       (0)
     #define XGMTIME(c, t)   rtpsys_gmtime((c))
 
-#elif defined(WOLFSSL_DEOS)
+#elif defined(WOLFSSL_DEOS) || defined(WOLFSSL_DEOS_RTEMS)
     #include <time.h>
-
+        #ifndef XTIME
+            extern time_t deos_time(time_t* timer);
+            #define XTIME(t1) deos_time((t1))
+        #endif
 #elif defined(MICRIUM)
     #include <clk.h>
     #include <time.h>
@@ -778,6 +801,13 @@ WOLFSSL_ABI WOLFSSL_API int wolfCrypt_Cleanup(void);
     extern time_t pic32_time(time_t* timer);
     #define XTIME(t1)       pic32_time((t1))
     #define XGMTIME(c, t)   gmtime((c))
+
+#elif defined(FREESCALE_RTC)
+    #include <time.h>
+        #include "fsl_rtc.h"
+        #ifndef XTIME
+        #define XTIME(t1) fsl_time((t1))
+    #endif
 
 #elif defined(FREESCALE_MQX) || defined(FREESCALE_KSDK_MQX)
     #ifdef FREESCALE_MQX_4_0

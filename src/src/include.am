@@ -18,6 +18,7 @@ MAINTAINERCLEANFILES+= $(FIPS_FILES)
 
 EXTRA_DIST += src/bio.c
 EXTRA_DIST += src/conf.c
+EXTRA_DIST += src/ssl_misc.c
 EXTRA_DIST += src/pk.c
 EXTRA_DIST += src/x509.c
 EXTRA_DIST += src/x509_str.c
@@ -110,7 +111,11 @@ endif
 
 if BUILD_AESNI
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_asm.S
+if BUILD_X86_ASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_x86_asm.S
+else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_asm.S
+endif
 endif
 
 if BUILD_DES3
@@ -134,6 +139,9 @@ endif
 
 if BUILD_SHA3
 src_libwolfssl_la_SOURCES += wolfcrypt/src/sha3.c
+if BUILD_INTELASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/sha3_asm.S
+endif
 endif
 
 if BUILD_DH
@@ -186,12 +194,19 @@ if BUILD_AES
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes.c
 if BUILD_ARMASM
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-aes.c
+if !BUILD_ARMASM_CRYPTO
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-aes-asm.S
+endif
 endif
 endif
 
 if BUILD_AESNI
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_asm.S
+if BUILD_X86_ASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_x86_asm.S
+else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_asm.S
+endif
 endif
 
 if BUILD_SHA
@@ -200,6 +215,11 @@ endif
 
 if BUILD_ARMASM
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha256.c
+if BUILD_ARMASM_INLINE
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-sha256-asm_c.c
+else
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-sha256-asm.S
+endif
 else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/sha256.c
 if BUILD_INTELASM
@@ -233,6 +253,9 @@ src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha3-asm_c.c
 else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha3-asm.S
 endif
+endif
+if BUILD_INTELASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/sha3_asm.S
 endif
 endif
 
@@ -294,10 +317,15 @@ endif
 endif !BUILD_FIPS_CURRENT
 
 if !BUILD_FIPS_CURRENT
+src_libwolfssl_la_SOURCES += wolfcrypt/src/sha256.c
 if BUILD_ARMASM
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha256.c
+if BUILD_ARMASM_INLINE
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-sha256-asm_c.c
 else
-src_libwolfssl_la_SOURCES += wolfcrypt/src/sha256.c
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-sha256-asm.S
+endif
+else
 if BUILD_INTELASM
 src_libwolfssl_la_SOURCES += wolfcrypt/src/sha256_asm.S
 endif
@@ -379,11 +407,14 @@ if BUILD_AES
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes.c
 if BUILD_ARMASM
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-aes.c
-endif
+if !BUILD_ARMASM_CRYPTO
+src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-32-aes-asm.S
+endif !BUILD_ARMASM_CRYPTO
+endif BUILD_ARMASM
 if BUILD_AFALG
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/af_alg/afalg_aes.c
 endif
-endif
+endif BUILD_AES
 endif !BUILD_FIPS_CURRENT
 
 if !BUILD_FIPS_CURRENT
@@ -433,6 +464,9 @@ src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha3-asm_c.c
 else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/port/arm/armv8-sha3-asm.S
 endif
+endif
+if BUILD_INTELASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/sha3_asm.S
 endif
 endif
 endif !BUILD_FIPS_CURRENT
@@ -517,7 +551,11 @@ endif
 if !BUILD_FIPS_CURRENT
 if BUILD_AESNI
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_asm.S
+if BUILD_X86_ASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_x86_asm.S
+else
 src_libwolfssl_la_SOURCES += wolfcrypt/src/aes_gcm_asm.S
+endif
 endif
 endif
 
@@ -575,6 +613,16 @@ src_libwolfssl_la_SOURCES += wolfcrypt/src/eccsi.c
 endif
 if BUILD_SAKKE
 src_libwolfssl_la_SOURCES += wolfcrypt/src/sakke.c
+endif
+endif
+
+if !BUILD_FIPS_CURRENT
+if BUILD_WC_KYBER
+src_libwolfssl_la_SOURCES += wolfcrypt/src/wc_kyber.c
+src_libwolfssl_la_SOURCES += wolfcrypt/src/wc_kyber_poly.c
+if BUILD_INTELASM
+src_libwolfssl_la_SOURCES += wolfcrypt/src/wc_kyber_asm.S
+endif
 endif
 endif
 
@@ -653,6 +701,8 @@ endif
 if BUILD_LIBOQS
 src_libwolfssl_la_SOURCES += wolfcrypt/src/falcon.c
 src_libwolfssl_la_SOURCES += wolfcrypt/src/dilithium.c
+src_libwolfssl_la_SOURCES += wolfcrypt/src/sphincs.c
+src_libwolfssl_la_SOURCES += wolfcrypt/src/ext_kyber.c
 endif
 
 if BUILD_LIBZ
@@ -704,7 +754,7 @@ if BUILD_QUIC
 src_libwolfssl_la_SOURCES += src/quic.c
 endif
 
-if BUILD_DTLS_CID
+if BUILD_DTLS
 src_libwolfssl_la_SOURCES += src/dtls.c
 endif
 

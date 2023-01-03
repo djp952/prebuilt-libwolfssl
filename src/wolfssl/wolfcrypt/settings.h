@@ -256,6 +256,13 @@
 /* Uncomment next line if building for Dolphin Emulator */
 /* #define DOLPHIN_EMULATOR */
 
+/* Uncomment next line if using MAXQ1065 */
+/* #define WOLFSSL_MAXQ1065 */
+
+/* Uncomment next line if using MAXQ108x */
+/* #define WOLFSSL_MAXQ108X */
+
+
 #include <wolfssl/wolfcrypt/visibility.h>
 
 #ifdef WOLFSSL_USER_SETTINGS
@@ -1318,6 +1325,40 @@ extern void uITRON4_free(void *p) ;
     #define GCM_TABLE
 #endif
 
+#if defined(WOLFSSL_MAXQ1065) || defined(WOLFSSL_MAXQ108X)
+
+    #define MAXQ10XX_MODULE_INIT
+
+    #define HAVE_PK_CALLBACKS
+    #define WOLFSSL_STATIC_PSK
+    /* Server side support to be added at a later date. */
+    #define NO_WOLFSSL_SERVER
+    /* Need WOLFSSL_PUBLIC_ASN to use ProcessPeerCert callback. */
+    #define WOLFSSL_PUBLIC_ASN
+
+    #ifdef HAVE_PTHREAD
+        #define WOLFSSL_CRYPT_HW_MUTEX 1
+        #define MAXQ10XX_MUTEX
+    #endif
+
+    #define WOLFSSL_MAXQ10XX_CRYPTO
+    #define WOLFSSL_MAXQ10XX_TLS
+
+
+    #if defined(WOLFSSL_MAXQ1065)
+        #define MAXQ_DEVICE_ID 1065
+    #elif defined(WOLFSSL_MAXQ108X)
+        #define MAXQ_DEVICE_ID 1080
+    #else
+        #error "There is only support for MAXQ1065 or MAXQ1080"
+    #endif
+
+    #if defined(WOLFSSL_TICKET_NONCE_MALLOC)
+        #error "WOLFSSL_TICKET_NONCE_MALLOC disables the HKDF expand callbacks."
+    #endif
+
+#endif /* WOLFSSL_MAXQ1065 || WOLFSSL_MAXQ108X */
+
 #if defined(WOLFSSL_STM32F2) || defined(WOLFSSL_STM32F4) || \
     defined(WOLFSSL_STM32F7) || defined(WOLFSSL_STM32F1) || \
     defined(WOLFSSL_STM32L4) || defined(WOLFSSL_STM32L5) || \
@@ -1641,8 +1682,10 @@ extern void uITRON4_free(void *p) ;
 
 
 #if defined(WOLFSSL_XILINX)
+    #if !defined(WOLFSSL_XILINX_CRYPT_VERSAL)
+        #define NO_DEV_RANDOM
+    #endif
     #define NO_WOLFSSL_DIR
-    #define NO_DEV_RANDOM
     #define HAVE_AESGCM
 #endif
 
@@ -1924,7 +1967,9 @@ extern void uITRON4_free(void *p) ;
     #if !defined(USE_INTEGER_HEAP_MATH)
         #undef  USE_FAST_MATH
         #define USE_FAST_MATH
-        #define FP_MAX_BITS 8192
+        #ifndef FP_MAX_BITS
+            #define FP_MAX_BITS 8192
+        #endif
     #endif
 #endif
 /*----------------------------------------------------------------------------*/
@@ -1935,7 +1980,16 @@ extern void uITRON4_free(void *p) ;
 /* user can specify what curves they want with ECC_USER_CURVES otherwise
  * all curves are on by default for now */
 #ifndef ECC_USER_CURVES
-    #if !defined(WOLFSSL_SP_MATH) && !defined(HAVE_ALL_CURVES)
+    #ifdef WOLFSSL_SP_MATH
+        /* for single precision math only make sure the enabled key sizes are
+         * included in the ECC curve table */
+        #if defined(WOLFSSL_SP_384) && !defined(HAVE_ECC384)
+            #define HAVE_ECC384
+        #endif
+        #if defined(WOLFSSL_SP_521) && !defined(HAVE_ECC521)
+            #define HAVE_ECC521
+        #endif
+    #elif !defined(HAVE_ALL_CURVES)
         #define HAVE_ALL_CURVES
     #endif
 #endif
@@ -2241,19 +2295,19 @@ extern void uITRON4_free(void *p) ;
 
 /* Asynchronous Crypto */
 #ifdef WOLFSSL_ASYNC_CRYPT
+    #if !defined(HAVE_CAVIUM) && !defined(HAVE_INTEL_QA) && \
+        !defined(WOLFSSL_ASYNC_CRYPT_SW)
+        #error No async backend defined with WOLFSSL_ASYNC_CRYPT!
+    #endif
+
     /* Make sure wolf events are enabled */
     #undef HAVE_WOLF_EVENT
     #define HAVE_WOLF_EVENT
 
-    #ifdef WOLFSSL_ASYNC_CRYPT_TEST
+    #ifdef WOLFSSL_ASYNC_CRYPT_SW
         #define WC_ASYNC_DEV_SIZE 168
     #else
         #define WC_ASYNC_DEV_SIZE 336
-    #endif
-
-    #if !defined(HAVE_CAVIUM) && !defined(HAVE_INTEL_QA) && \
-        !defined(WOLFSSL_ASYNC_CRYPT_TEST)
-        #error No async hardware defined with WOLFSSL_ASYNC_CRYPT!
     #endif
 
     /* Enable ECC_CACHE_CURVE for ASYNC */
@@ -2278,7 +2332,7 @@ extern void uITRON4_free(void *p) ;
          #error static memory cannot be used with HAVE_IO_POOL, XMALLOC_USER or NO_WOLFSSL_MEMORY
     #endif
     #if !defined(WOLFSSL_SP_MATH_ALL) && !defined(USE_FAST_MATH) && \
-        !defined(NO_BIG_INT)
+        !defined(WOLFSSL_SP_MATH) && !defined(NO_BIG_INT)
          #error The static memory option is only supported for fast math or SP Math
     #endif
     #ifdef WOLFSSL_SMALL_STACK
@@ -2365,9 +2419,6 @@ extern void uITRON4_free(void *p) ;
     #endif
     #ifndef USE_WOLF_STRTOK
         #define USE_WOLF_STRTOK
-    #endif
-    #ifndef WOLFSSL_SP_DIV_WORD_HALF
-        #define WOLFSSL_SP_DIV_WORD_HALF
     #endif
     #ifndef WOLFSSL_OLD_PRIME_CHECK
         #define WOLFSSL_OLD_PRIME_CHECK
@@ -2576,7 +2627,8 @@ extern void uITRON4_free(void *p) ;
 
 #if defined(WOLFCRYPT_ONLY) && defined(NO_AES) && !defined(WOLFSSL_SHA384) && \
     !defined(WOLFSSL_SHA512) && defined(WC_NO_RNG) && \
-    !defined(WOLFSSL_SP_MATH) && !defined(WOLFSSL_SP_MATH_ALL)
+    !defined(WOLFSSL_SP_MATH) && !defined(WOLFSSL_SP_MATH_ALL) \
+    && !defined(USE_FAST_MATH)
     #undef  WOLFSSL_NO_FORCE_ZERO
     #define WOLFSSL_NO_FORCE_ZERO
 #endif
@@ -2635,6 +2687,13 @@ extern void uITRON4_free(void *p) ;
 #if FIPS_VERSION_EQ(1,0)
     #undef WC_RSA_PSS
     #undef WOLFSSL_TLS13
+#endif
+
+/* FIPS v2 does not support WOLFSSL_PSS_LONG_SALT */
+#if FIPS_VERSION_EQ(2,0)
+    #ifdef WOLFSSL_PSS_LONG_SALT
+        #undef WOLFSSL_PSS_LONG_SALT
+    #endif
 #endif
 
 /* For FIPSv2 make sure the ECDSA encoding allows extra bytes
@@ -2715,21 +2774,31 @@ extern void uITRON4_free(void *p) ;
     #endif
 #endif
 
+#ifdef WOLFSSL_HAVE_KYBER
+#define HAVE_PQC
+#endif
+
 /* Enable Post-Quantum Cryptography if we have liboqs from the OpenQuantumSafe
  * group */
 #ifdef HAVE_LIBOQS
 #define HAVE_PQC
 #define HAVE_FALCON
 #define HAVE_DILITHIUM
-#define HAVE_KYBER
+#define HAVE_SPHINCS
+#define WOLFSSL_HAVE_KYBER
+#define WOLFSSL_KYBER512
+#define WOLFSSL_KYBER768
+#define WOLFSSL_KYBER1024
 #endif
 
 #ifdef HAVE_PQM4
 #define HAVE_PQC
 #define HAVE_KYBER
+#define WOLFSSL_KYBER512
 #endif
 
-#if defined(HAVE_PQC) && !defined(HAVE_LIBOQS) && !defined(HAVE_PQM4)
+#if defined(HAVE_PQC) && !defined(HAVE_LIBOQS) && !defined(HAVE_PQM4) && \
+    !defined(WOLFSSL_HAVE_KYBER)
 #error Please do not define HAVE_PQC yourself.
 #endif
 
@@ -2744,14 +2813,13 @@ extern void uITRON4_free(void *p) ;
 
 /* Are we using an external private key store like:
  *     PKCS11 / HSM / crypto callback / PK callback */
-#if !defined(WOLF_PRIVATE_KEY_ID) && \
-    (defined(HAVE_PKCS11) || defined(HAVE_PK_CALLBACKS) || \
-     defined(WOLF_CRYPTO_CB) || defined(WOLFSSL_KCAPI))
-     /* Enables support for using wolfSSL_CTX_use_PrivateKey_Id and
-      *   wolfSSL_CTX_use_PrivateKey_Label */
-    #define WOLF_PRIVATE_KEY_ID
+#if !defined(WOLF_PRIVATE_KEY_ID) && !defined(NO_WOLF_PRIVATE_KEY_ID) && \
+        (defined(HAVE_PKCS11) || defined(HAVE_PK_CALLBACKS) || \
+         defined(WOLF_CRYPTO_CB) || defined(WOLFSSL_KCAPI))
+         /* Enables support for using wolfSSL_CTX_use_PrivateKey_Id and
+          *   wolfSSL_CTX_use_PrivateKey_Label */
+        #define WOLF_PRIVATE_KEY_ID
 #endif
-
 
 /* With titan cache size there is too many sessions to fit with the default
  * multiplier of 8 */
@@ -2759,8 +2827,9 @@ extern void uITRON4_free(void *p) ;
     #define NO_SESSION_CACHE_REF
 #endif
 
-/* DTLS v1.3 requires 64-bit number wrappers */
-#if defined(WOLFSSL_DTLS13) && !defined(WOLFSSL_W64_WRAPPER)
+/* (D)TLS v1.3 requires 64-bit number wrappers */
+#if defined(WOLFSSL_TLS13) || defined(WOLFSSL_DTLS_DROP_STATS)
+    #undef WOLFSSL_W64_WRAPPER
     #define WOLFSSL_W64_WRAPPER
 #endif
 
@@ -2793,6 +2862,23 @@ extern void uITRON4_free(void *p) ;
     #define WOLFSSL_RSA_KEY_CHECK
 #endif
 
+/* SHAKE - Not allowed in FIPS */
+#if defined(WOLFSSL_SHA3) && !defined(HAVE_SELFTEST) && !defined(HAVE_FIPS)
+    #ifndef WOLFSSL_NO_SHAKE128
+        #undef  WOLFSSL_SHAKE128
+        #define WOLFSSL_SHAKE128
+    #endif
+    #ifndef WOLFSSL_NO_SHAKE256
+        #undef  WOLFSSL_SHAKE256
+        #define WOLFSSL_SHAKE256
+    #endif
+#else
+    #undef  WOLFSSL_NO_SHAKE128
+    #define WOLFSSL_NO_SHAKE128
+    #undef  WOLFSSL_NO_SHAKE256
+    #define WOLFSSL_NO_SHAKE256
+#endif
+
 
 
 
@@ -2818,6 +2904,23 @@ extern void uITRON4_free(void *p) ;
     #undef WOLFSSL_ASYNC_IO
     #define WOLFSSL_ASYNC_IO
 #endif
+
+#ifdef WOLFSSL_SYS_CA_CERTS
+    #ifdef NO_FILESYSTEM
+        /* Turning off WOLFSSL_SYS_CA_CERTS b/c NO_FILESYSTEM is defined */
+        #undef WOLFSSL_SYS_CA_CERTS
+    #endif
+
+    #ifdef NO_CERTS
+        /* Turning off WOLFSSL_SYS_CA_CERTS b/c NO_CERTS is defined */
+        #undef WOLFSSL_SYS_CA_CERTS
+    #endif
+
+    #if defined(__APPLE__) && !defined(HAVE_SECURITY_SECTRUSTSETTINGS_H)
+        /* Turning off WOLFSSL_SYS_CA_CERTS b/c no Security/SecTrustSettings.h header */
+        #undef WOLFSSL_SYS_CA_CERTS
+    #endif
+#endif /* WOLFSSL_SYS_CA_CERTS */
 
 #ifdef __cplusplus
     }   /* extern "C" */

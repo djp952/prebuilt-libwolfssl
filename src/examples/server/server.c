@@ -577,8 +577,23 @@ static void ServerRead(WOLFSSL* ssl, char* input, int inputLen)
         }
         else if (SSL_get_error(ssl, 0) == 0 &&
                             tcp_select(SSL_get_fd(ssl), 0) == TEST_RECV_READY) {
-            err = wolfSSL_peek(ssl, buffer, 0);
-            if(err < 0) {
+            /* do a peek and check for "pending" */
+            #ifdef WOLFSSL_ASYNC_CRYPT
+            err = 0;
+            #endif
+            do {
+            #ifdef WOLFSSL_ASYNC_CRYPT
+                if (err == WC_PENDING_E) {
+                    ret = wolfSSL_AsyncPoll(ssl, WOLF_POLL_FLAG_CHECK_HW);
+                    if (ret < 0) break;
+                }
+            #endif
+                ret = wolfSSL_peek(ssl, buffer, 0);
+                err = SSL_get_error(ssl, ret);
+            } while (err == WC_PENDING_E
+                || err == WOLFSSL_ERROR_WANT_READ
+                || err == WOLFSSL_ERROR_WANT_WRITE);
+            if (err < 0) {
                 err_sys_ex(runWithErrors, "wolfSSL_peek failed");
             }
             if (wolfSSL_pending(ssl))
@@ -692,57 +707,6 @@ static void SetKeyShare(WOLFSSL* ssl, int onlyKeyShare, int useX25519,
             else if (XSTRCMP(pqcAlg, "KYBER_LEVEL5") == 0) {
                 groups[count] = WOLFSSL_KYBER_LEVEL5;
             }
-            else if (XSTRCMP(pqcAlg, "NTRU_HPS_LEVEL1") == 0)  {
-                groups[count] = WOLFSSL_NTRU_HPS_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "NTRU_HPS_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_NTRU_HPS_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "NTRU_HPS_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_NTRU_HPS_LEVEL5;
-            }
-            else if (XSTRCMP(pqcAlg, "NTRU_HRSS_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_NTRU_HRSS_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "SABER_LEVEL1") == 0) {
-                groups[count] = WOLFSSL_SABER_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "SABER_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_SABER_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "SABER_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_SABER_LEVEL5;
-            }
-            else if (XSTRCMP(pqcAlg, "KYBER_90S_LEVEL1") == 0) {
-                groups[count] = WOLFSSL_KYBER_90S_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "KYBER_90S_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_KYBER_90S_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "KYBER_90S_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_KYBER_90S_LEVEL5;
-            }
-            else if (XSTRCMP(pqcAlg, "P256_NTRU_HPS_LEVEL1") == 0) {
-                groups[count] = WOLFSSL_P256_NTRU_HPS_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "P384_NTRU_HPS_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_P384_NTRU_HPS_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "P521_NTRU_HPS_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_P521_NTRU_HPS_LEVEL5;
-            }
-            else if (XSTRCMP(pqcAlg, "P384_NTRU_HRSS_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_P384_NTRU_HRSS_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "P256_SABER_LEVEL1") == 0) {
-                groups[count] = WOLFSSL_P256_SABER_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "P384_SABER_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_P384_SABER_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "P521_SABER_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_P521_SABER_LEVEL5;
-            }
             else if (XSTRCMP(pqcAlg, "P256_KYBER_LEVEL1") == 0) {
                 groups[count] = WOLFSSL_P256_KYBER_LEVEL1;
             }
@@ -751,15 +715,6 @@ static void SetKeyShare(WOLFSSL* ssl, int onlyKeyShare, int useX25519,
             }
             else if (XSTRCMP(pqcAlg, "P521_KYBER_LEVEL5") == 0) {
                 groups[count] = WOLFSSL_P521_KYBER_LEVEL5;
-            }
-            else if (XSTRCMP(pqcAlg, "P256_KYBER_90S_LEVEL1") == 0) {
-                groups[count] = WOLFSSL_P256_KYBER_90S_LEVEL1;
-            }
-            else if (XSTRCMP(pqcAlg, "P384_KYBER_90S_LEVEL3") == 0) {
-                groups[count] = WOLFSSL_P384_KYBER_90S_LEVEL3;
-            }
-            else if (XSTRCMP(pqcAlg, "P521_KYBER_90S_LEVEL5") == 0) {
-                groups[count] = WOLFSSL_P521_KYBER_90S_LEVEL5;
             }
 
             if (groups[count] == 0) {
@@ -936,7 +891,8 @@ static const char* server_usage_msg[][65] = {
         "-Q          Request certificate from client post-handshake\n", /* 49 */
 #endif
 #ifdef WOLFSSL_SEND_HRR_COOKIE
-        "-J          Server sends Cookie Extension containing state\n", /* 50 */
+        "-J [n]      Server sends Cookie Extension containing state (n to "
+        "disable)\n", /* 50 */
 #endif
 #endif /* WOLFSSL_TLS13 */
 #ifdef WOLFSSL_EARLY_DATA
@@ -978,13 +934,7 @@ static const char* server_usage_msg[][65] = {
 #endif
 #ifdef HAVE_PQC
         "--pqc <alg> Key Share with specified post-quantum algorithm only [KYBER_LEVEL1, KYBER_LEVEL3,\n"
-            "            KYBER_LEVEL5, KYBER_90S_LEVEL1, KYBER_90S_LEVEL3, KYBER_90S_LEVEL5,\n"
-            "            NTRU_HPS_LEVEL1, NTRU_HPS_LEVEL3, NTRU_HPS_LEVEL5, NTRU_HRSS_LEVEL3,\n"
-            "            SABER_LEVEL1, SABER_LEVEL3, SABER_LEVEL5, P256_NTRU_HPS_LEVEL1,\n"
-            "            P384_NTRU_HPS_LEVEL3, P521_NTRU_HPS_LEVEL5, P384_NTRU_HRSS_LEVEL3,\n"
-            "            P256_SABER_LEVEL1, P384_SABER_LEVEL3, P521_SABER_LEVEL5, P256_KYBER_LEVEL1,\n"
-            "            P384_KYBER_LEVEL3, P521_KYBER_LEVEL5, P256_KYBER_90S_LEVEL1, P384_KYBER_90S_LEVEL3,\n"
-            "            P521_KYBER_90S_LEVEL5]\n",                          /* 60 */
+            "            KYBER_LEVEL5,  P256_KYBER_LEVEL1, P384_KYBER_LEVEL3, P521_KYBER_LEVEL5] \n", /* 60 */
 #endif
 #ifdef WOLFSSL_SRTP
         "--srtp <profile> (default is SRTP_AES128_CM_SHA1_80)\n",       /* 61 */
@@ -1169,13 +1119,7 @@ static const char* server_usage_msg[][65] = {
 #endif
 #ifdef HAVE_PQC
         "--pqc <alg> post-quantum 名前付きグループとの鍵共有のみ [KYBER_LEVEL1, KYBER_LEVEL3,\n"
-            "            KYBER_LEVEL5, KYBER_90S_LEVEL1, KYBER_90S_LEVEL3, KYBER_90S_LEVEL5,\n"
-            "            NTRU_HPS_LEVEL1, NTRU_HPS_LEVEL3, NTRU_HPS_LEVEL5, NTRU_HRSS_LEVEL3,\n"
-            "            SABER_LEVEL1, SABER_LEVEL3, SABER_LEVEL5, P256_NTRU_HPS_LEVEL1,\n"
-            "            P384_NTRU_HPS_LEVEL3, P521_NTRU_HPS_LEVEL5, P384_NTRU_HRSS_LEVEL3,\n"
-            "            P256_SABER_LEVEL1, P384_SABER_LEVEL3, P521_SABER_LEVEL5, P256_KYBER_LEVEL1,\n"
-            "            P384_KYBER_LEVEL3, P521_KYBER_LEVEL5, P256_KYBER_90S_LEVEL1, P384_KYBER_90S_LEVEL3,\n"
-            "            P521_KYBER_90S_LEVEL5]\n",                          /* 60 */
+            "            KYBER_LEVEL5, P256_KYBER_LEVEL1, P384_KYBER_LEVEL3, P521_KYBER_LEVEL5]\n", /* 60 */
 #endif
 #ifdef WOLFSSL_SRTP
         "--srtp <profile> (デフォルトはSRTP_AES128_CM_SHA1_80)\n",       /* 61 */
@@ -1414,6 +1358,7 @@ static int server_srtp_test(WOLFSSL *ssl, func_args *args)
     return 0;
 }
 #endif
+
 
 THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
 {
@@ -1702,7 +1647,7 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
     /* Not Used: h, z, W, X */
     while ((ch = mygetopt_long(argc, argv, "?:"
                 "abc:defgijk:l:mop:q:rstu;v:wxy"
-                "A:B:C:D:E:FGH:IJKL:MNO:PQR:S:T;UVYZ:"
+                "A:B:C:D:E:FGH:IJ;KL:MNO:PQR:S:T;UVYZ:"
                 "01:23:4:567:89"
                 "@#", long_options, 0)) != -1) {
         switch (ch) {
@@ -2085,6 +2030,8 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
             case 'J' :
             #ifdef WOLFSSL_SEND_HRR_COOKIE
                 hrrCookie = 1;
+                if (XSTRCMP(myoptarg, "n") == 0)
+                    hrrCookie = -1;
             #endif
                 break;
 
@@ -2355,6 +2302,12 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
         }
     }
 
+#ifndef HAVE_SESSION_TICKET
+    if ((version >= 4) && resume) {
+        fprintf(stderr, "Can't do TLS 1.3 resumption; need session tickets!\n");
+    }
+#endif
+
 #ifdef HAVE_WNR
     if (wc_InitNetRandom(wnrConfigFile, NULL, 5000) != 0)
         err_sys_ex(runWithErrors, "can't load whitewood net random config "
@@ -2368,8 +2321,8 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
             fprintf(stderr,
                    "WARNING: If a TLS 1.3 connection is not negotiated, you "
                    "will not be using a post-quantum group.\n");
-        } else if (version != 4) {
-            err_sys("can only use post-quantum groups with TLS 1.3");
+        } else if (version != 4 && version != -4) {
+            err_sys("can only use post-quantum groups with TLS 1.3 or DTLS 1.3");
         }
     }
 #endif
@@ -2484,6 +2437,9 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
     if (method != NULL) {
         ctx = SSL_CTX_new(method(NULL));
     }
+#ifdef WOLFSSL_CALLBACKS
+    wolfSSL_CTX_set_msg_callback(ctx, msgDebugCb);
+#endif
 #endif /* WOLFSSL_STATIC_MEMORY */
     if (ctx == NULL)
         err_sys_ex(catastrophic, "unable to get ctx");
@@ -2717,8 +2673,10 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
                 ;
         #elif defined(HAVE_NULL_CIPHER)
                 defaultCipherList = "PSK-NULL-SHA256";
-        #else
+        #elif !defined(NO_AES_CBC)
                 defaultCipherList = "PSK-AES128-CBC-SHA256";
+        #else
+                defaultCipherList = "PSK-AES128-GCM-SHA256";
         #endif
             if (SSL_CTX_set_cipher_list(ctx, defaultCipherList)
                 != WOLFSSL_SUCCESS)
@@ -2959,9 +2917,12 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
 #endif /* !NO_CERTS */
 
 #ifdef WOLFSSL_SEND_HRR_COOKIE
-        if (hrrCookie && wolfSSL_send_hrr_cookie(ssl, NULL, 0)
+        if (hrrCookie == 1 && wolfSSL_send_hrr_cookie(ssl, NULL, 0)
             != WOLFSSL_SUCCESS) {
             err_sys("unable to set use of cookie with HRR msg");
+        }
+        else if (hrrCookie == -1) {
+            wolfSSL_disable_hrr_cookie(ssl);
         }
 #endif
 
@@ -3104,7 +3065,7 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
     #endif
 
     #if defined(WOLFSSL_TLS13) && defined(HAVE_SUPPORTED_CURVES)
-        if (version >= 4) {
+        if (version >= 4 || version == -4) {
             #ifdef CAN_FORCE_CURVE
             if (force_curve_group_id > 0) {
                 do {
@@ -3348,6 +3309,7 @@ THREAD_RETURN WOLFSSL_THREAD server_test(void* args)
             } while (err == WC_PENDING_E);
         }
 #else
+        (void)nonBlocking;
         ret = NonBlockingSSL_Accept(ssl);
 #endif
 #ifdef WOLFSSL_EARLY_DATA
@@ -3790,7 +3752,7 @@ exit:
 #ifdef HAVE_SECURE_RENEGOTIATION
     (void) forceScr;
 #endif
-#ifdef WOLFSSL_CALLBACKS
+#if defined(WOLFSSL_CALLBACKS) && defined(WOLFSSL_EARLY_DATA)
     (void) earlyData;
 #endif
 #ifndef WOLFSSL_TIRTOS
